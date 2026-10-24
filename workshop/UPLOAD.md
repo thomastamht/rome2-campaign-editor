@@ -7,7 +7,7 @@
 | `release/rome2_web_editor.pack` | `npm run build:pack` | PFH4 mod pack，3 个文件（episodicscripting.lua 挂钩 + 桥接 Lua + json.lua） |
 | `release/rome2_web_editor.png` | `workshop/base/rome2_web_editor.png` | 预览图，必须与 pack 同名、PNG、小于 1 MB（当前 512×512，约 323 KB） |
 | `workshop/base/title.txt` | — | 条目标题 |
-| `workshop/base/description.bbcode.txt` | — | 条目描述（Steam BBCode，中英双语）。上传前把 `WEB_APP_URL`、`SOURCE_URL` 替换为真实链接 |
+| `workshop/base/description.bbcode.txt` | — | 条目描述（Steam BBCode，中英双语）。网页端 https://thomastamht.github.io/rome2-campaign-editor/，源码 https://github.com/thomastamht/rome2-campaign-editor |
 | `workshop/base/tags.txt` | — | 建议标签 |
 | `workshop/base/changelog.txt` | — | 首次上传与后续更新的更新日志 |
 
@@ -23,7 +23,7 @@
 5. 上传完成后记录 Workshop ID（URL 中的 `?id=`），回填到：
    - `README.md` 的“订阅”链接
    - `description.bbcode.txt` 顶部（可选，方便引用）
-6. 发布网页端：`npm run build` 后把 `dist/` 推到 GitHub Pages（与原作一致），把地址替换进 `WEB_APP_URL`，然后用 Steam 页面的 **Edit title & description** 更新描述。
+6. 更新网页端：`npm run build` 后把 `dist/` 推到 `gh-pages` 分支，地址 https://thomastamht.github.io/rome2-campaign-editor/ 不变；描述改动用 Steam 页面的 **Edit title & description** 更新。
 
 ## 更新 / Updating
 
@@ -37,4 +37,4 @@
 - [ ] `node tools/read-pack.mjs release/rome2_web_editor.pack` 显示 `OK`、3 个条目
 - [ ] 游戏内：载入战役后 `%USERPROFILE%\rome2_web_editor_mod\response.json` 出现 `"status":"ready"`
 - [ ] 网页端连接后 `get_factions` / `get_regions` / `treasury_mod` 正常
-- [ ] 描述中的 `WEB_APP_URL` / `SOURCE_URL` 已替换
+- [x] 描述中的网页与源码链接已填好

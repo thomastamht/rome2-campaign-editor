@@ -1,7 +1,7 @@
 [h1]Web Campaign Editor for ROME II (experimental)[/h1]
 Edit a running campaign from your browser. A port of IMRZ's [url=https://steamcommunity.com/sharedfiles/filedetails/?id=2295560801]Web campaign editor[/url] for WARHAMMER II to Total War: ROME II. Works with vanilla and with total conversions such as Divide et Impera — everything (factions, regions, characters) is read live from the game, nothing is hard-coded.
 
-Web app: [b]WEB_APP_URL[/b]  (replace after deploying dist/ to GitHub Pages or run it locally with npm run dev)
+Web app: [b][url=https://thomastamht.github.io/rome2-campaign-editor/]https://thomastamht.github.io/rome2-campaign-editor/[/url][/b]
 
 [h2]Features[/h2]
 [list]
@@ -38,14 +38,14 @@ The mod ships one Lua hook inside lua_scripts/episodicscripting.lua, which every
 
 [h2]Credits[/h2]
 IMRZ for the original WARHAMMER II editor and its request/response design · rxi for json.lua (MIT) · Creative Assembly for ROME II.
-Source code, pack builder and tests: SOURCE_URL
+Source code, pack builder and tests: [url=https://github.com/thomastamht/rome2-campaign-editor]https://github.com/thomastamht/rome2-campaign-editor[/url]
 
 [hr][/hr]
 
 [h1]ROME II 网页战役编辑器（实验性）[/h1]
 在浏览器中实时编辑正在进行的战役。移植自 IMRZ 的战锤 II [url=https://steamcommunity.com/sharedfiles/filedetails/?id=2295560801]Web campaign editor[/url]。原版与 DEI（Divide et Impera）等大型 Mod 通用：势力、地区、角色全部从游戏实时读取，没有任何写死的数据。
 
-网页端：[b]WEB_APP_URL[/b]
+网页端：[b][url=https://thomastamht.github.io/rome2-campaign-editor/]https://thomastamht.github.io/rome2-campaign-editor/[/url][/b]
 
 [h2]功能[/h2]
 [list]
@@ -82,4 +82,4 @@ Source code, pack builder and tests: SOURCE_URL
 
 [h2]致谢[/h2]
 IMRZ（原版战锤 II 编辑器及其请求/响应设计）· rxi（json.lua，MIT）· Creative Assembly（ROME II）。
-源码、pack 构建工具与测试：SOURCE_URL
+源码、pack 构建工具与测试：[url=https://github.com/thomastamht/rome2-campaign-editor]https://github.com/thomastamht/rome2-campaign-editor[/url]
