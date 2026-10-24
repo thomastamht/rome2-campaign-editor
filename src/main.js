@@ -553,7 +553,7 @@ function diplomacySection(f) {
     : f.key !== player && others.some(x => x.key === player) ? player
     : others[0]?.key;
   return `
-      <h4>${t("tabs.diplomacy")}</h4>
+      <h4>${t("diplomacy")}</h4>
       <div class="action-list">
         <div class="action-row"><small>${t("factionB")}</small><select id="diploB">${others.map(x => `<option value="${esc(x.key)}" ${x.key === b ? "selected" : ""}>${esc(x.name)}</option>`).join("")}</select></div>
         ${action("⚔", t("declareWar"), "force_declare_war", 'data-diplo="force_declare_war"')}
