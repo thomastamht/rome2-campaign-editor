@@ -50,8 +50,8 @@ appear once the bridge folder is connected and the game has written its ready ma
 |---|---|
 | Live map (armies, navies, agents, settlements) on the game's own terrain image, zoom/pan, click a marker for its panel, right-click to spawn | `get_snapshot` (or `get_active_characters` + `get_regions_detailed`), `create_force` |
 | Diplomacy tab: searchable faction table (click a faction for its panel: treasury adjust / set, effect bundles, tax rate, reveal map) | `get_factions`, `treasury_mod`, `apply_effect_bundle`, `set_tax_rate`, `reveal_all_regions` |
-| Regions: owner transfer, public order, development, repair, rebellion (each via a dialog); building list with per-slot repair (⚒) and dismantle (✕). Rome II scripts cannot construct or upgrade buildings | `transfer_region_to_faction`, `set_public_order`, `add_development_points_to_region`, `instantly_repair_building`, `force_rebellion_in_region`, `get_settlement_slots`, `repair_building`, `dismantle_building` |
-| Characters: general / agent experience (points), instant unit ranks for the whole force, add unit to a settlement garrison (searchable picker of all base-game units; Rome II scripts cannot add to an existing army), kill, replenish / zero AP | `award_experience_level`, `add_agent_experience`, `add_force_experience`, `grant_unit`, `kill_character`, `replenish_action_points`, `zero_action_points` |
+| Regions: owner transfer, public order, development, repair, rebellion (each via a dialog); building list with per-slot repair (⚒). Rome II scripts cannot construct or upgrade buildings | `transfer_region_to_faction`, `set_public_order`, `add_development_points_to_region`, `instantly_repair_building`, `force_rebellion_in_region`, `get_settlement_slots`, `repair_building` |
+| Characters: general / agent experience (points), instant unit ranks for the whole force, add unit to a settlement garrison (searchable picker of all base-game units; Rome II scripts cannot add to an existing army), replenish / zero AP | `award_experience_level`, `add_agent_experience`, `add_force_experience`, `grant_unit`, `replenish_action_points`, `zero_action_points` |
 | Faction panel → diplomacy with a chosen counterpart: force war, peace, trade, vassal; allow/block any diplomatic option (Rome II cannot force other treaties) | `force_declare_war`, `force_make_peace`, `force_make_trade_agreement`, `force_make_vassal`, `force_diplomacy` |
 | Settings: language (English / 简体中文 / 繁體中文, remembered) | — |
 | Console: any request by hand, exchange log, list of available request types | everything above + `heartbeat`, `get_game_info`, `show_shroud`, `scroll_camera`, `end_turn`, `move_force`, `join_garrison`, `relocate_force` (console only) |
@@ -74,7 +74,7 @@ are still unverified in game is documented in `TESTING.md`:
 | Status | Meaning |
 |---|---|
 | `verified` | exact call found in CA's own Rome II Lua (`treasury_mod`, `transfer_region_to_faction`, `create_force`, `force_declare_war`, `apply_effect_bundle`, `make_region_visible_in_shroud`, `replenish_action_points`, `scroll_camera`, `add_agent_experience`, …) |
-| `engine` | method name present in Rome II's `GAME` binding table (`empire.retail.dll`), argument order from Attila-era docs: `kill_character`, `award_experience_level` / `add_force_experience`, `grant_unit` (settlement garrison only), `force_make_vassal`, `set_tax_rate`, … |
+| `engine` | method name present in Rome II's `GAME` binding table (`empire.retail.dll`), argument order from Attila-era docs: `award_experience_level` / `add_force_experience`, `grant_unit` (settlement garrison only), `force_make_vassal`, `set_tax_rate`, … |
 | `composed` | built from several calls: `relocate_force` (`create_force` + deferred `kill_character`; console only, refuses faction leaders and human factions) |
 | `experimental` | `move_force` uses `game_interface:move_to` (CA's `lib_misc_campaign.lua` calls it); console only, AI armies ignore it during the player's turn |
 

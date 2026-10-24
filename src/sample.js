@@ -54,11 +54,10 @@ export const demoInfo = {
     replenish_action_points: "verified", zero_action_points: "verified", create_force: "verified", force_declare_war: "verified",
     force_make_peace: "verified", force_make_trade_agreement: "verified", force_diplomacy: "verified", apply_effect_bundle: "verified",
     remove_effect_bundle: "verified", make_region_visible_in_shroud: "verified", show_shroud: "verified", scroll_camera: "verified",
-    force_rebellion_in_region: "verified", kill_character: "engine", force_make_vassal: "engine", force_add_trait: "engine",
+    force_rebellion_in_region: "verified", force_make_vassal: "engine", force_add_trait: "engine",
     force_add_ancillary: "engine", grant_unit: "engine", add_development_points_to_region: "engine", set_tax_rate: "engine",
     hide_character: "engine", unhide_character: "engine", award_experience_level: "engine", add_agent_experience: "verified", add_force_experience: "engine",
-    instantly_repair_building: "engine", instantly_dismantle_building: "engine", get_settlement_slots: "verified",
-    repair_building: "verified", dismantle_building: "experimental",
+    instantly_repair_building: "engine", get_settlement_slots: "verified", repair_building: "verified",
     end_turn: "engine", relocate_force: "composed", relocate_status: "verified", move_force: "engine", move_status: "verified", join_garrison: "engine", leave_garrison: "engine",
   },
 };
@@ -107,7 +106,6 @@ export class DemoBridge {
   h_set_public_order({ region, value }) { this.region(region).public_order = Number(value); return { ok: true, region }; }
   h_replenish_action_points({ cqi }) { this.character(cqi); return { ok: true, cqi }; }
   h_zero_action_points({ cqi }) { this.character(cqi); return { ok: true, cqi }; }
-  h_kill_character({ cqi }) { this.character(cqi); this.characters = this.characters.filter(c => c.cqi !== Number(cqi)); return { ok: true, cqi }; }
   h_force_declare_war({ a, b }) { this.faction(a); this.faction(b); return { ok: true, a, b }; }
   h_force_make_peace({ a, b }) { this.faction(a); this.faction(b); return { ok: true, a, b }; }
   h_force_make_trade_agreement({ a, b }) { this.faction(a); this.faction(b); return { ok: true, a, b }; }
@@ -143,13 +141,6 @@ export class DemoBridge {
     if (!s.building) throw new Error(`slot ${slot} has no building`);
     return { ok: true, region, slot, building: s.building, percent: 100 };
   }
-  h_dismantle_building({ region, slot }) {
-    const s = this.slot(region, slot);
-    if (!s.building) throw new Error(`slot ${slot} has no building`);
-    const building = s.building;
-    delete s.building;
-    return { ok: true, region, slot, building };
-  }
   h_force_rebellion_in_region({ region }) { this.region(region); return { ok: true, region }; }
   h_set_tax_rate({ faction, rate }) { this.faction(faction); return { ok: true, faction, rate }; }
   h_force_add_ancillary({ cqi, ancillary }) { this.character(cqi); return { ok: true, cqi, ancillary }; }
@@ -178,7 +169,7 @@ export class DemoBridge {
     if (!c.has_force) throw new Error("character has no military force");
     const units = Math.max((c.units ?? 1) - (skip_first_unit ? 1 : 0), 0);
     assertOk(this.h_create_force({ faction: c.faction, units: Array(units).fill("Rom_Hastati").join(","), region, x, y }), "create_force");
-    this.h_kill_character({ cqi });
+    this.characters = this.characters.filter(x => x.cqi !== c.cqi);
     return { ok: true, faction: c.faction, region, units, killed_cqi: c.cqi };
   }
   h_join_garrison({ cqi, region }) { const c = this.character(cqi); const r = this.region(region); c.lx = r.lx; c.ly = r.ly; c.x = r.x; c.y = r.y; c.region = region; c.in_settlement = true; return { ok: true, cqi, region }; }

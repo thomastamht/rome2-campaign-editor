@@ -6,8 +6,8 @@ Web app: [b][url=https://thomastamht.github.io/rome2-campaign-editor/]https://th
 [h2]Features[/h2]
 [list]
 [*] Live map of every army, navy, agent and settlement on the game's own HD terrain map, with faction flags, zoom and pan
-[*] Click a general: general experience (points), instant ranks (chevrons) for every soldier in the army, add any base-game unit (searchable picker with localised names), replenish or zero action points, kill
-[*] Click an agent (spy / dignitary / champion): agent experience (points), replenish or zero action points, kill
+[*] Click a general: general experience (points), instant ranks (chevrons) for every soldier in the army, add any base-game unit (searchable picker with localised names), replenish or zero action points
+[*] Click an agent (spy / dignitary / champion): agent experience (points), replenish or zero action points
 [*] Click a settlement: transfer to another faction, public order, development points, repair, rebellion
 [*] Right-click the map to spawn a new army for any faction
 [*] Faction treasury: add / subtract / set an exact amount; effect bundles, tax rate, reveal the whole map
@@ -30,7 +30,6 @@ The mod ships one Lua hook inside lua_scripts/episodicscripting.lua, which every
 [h2]Limitations — please read[/h2]
 [list]
 [*] ROME II's scripting has no campaign teleport, so armies cannot be dragged on the map. Move them in the game and use "Replenish action points" from the character panel when they run out of movement.
-[*] Killing your own faction leader can crash the game. "Kill character" is meant for AI characters; save first.
 [*] Some commands exist in the game's script API but their argument order was taken from Attila-era documentation and has not been confirmed on ROME II yet. They are not flagged in the interface; the list of still-unverified commands is kept in TESTING.md in the project repository.
 [*] Single-player only. Using it in a multiplayer campaign will desync.
 [*] Only Chromium browsers (Chrome, Edge) support the folder access the web app relies on.
@@ -50,8 +49,8 @@ Source code, pack builder and tests: [url=https://github.com/thomastamht/rome2-c
 [h2]功能[/h2]
 [list]
 [*] 在游戏自带的高清地形图上实时显示所有军队、舰队、特工与城市，带势力旗帜，可缩放平移
-[*] 点将领：将军经验（点数）、全军士兵立即提升军衔、向军队添加任意本体兵种（可搜索、显示中文名）、补满 / 清空行动力、杀死角色
-[*] 点特工（间谍 / 政要 / 勇士）：特工经验（点数）、补满 / 清空行动力、杀死角色
+[*] 点将领：将军经验（点数）、全军士兵立即提升军衔、向军队添加任意本体兵种（可搜索、显示中文名）、补满 / 清空行动力
+[*] 点特工（间谍 / 政要 / 勇士）：特工经验（点数）、补满 / 清空行动力
 [*] 点城市：转移归属、设置治安、增加发展点数、修复建筑、触发叛乱
 [*] 右键地图为任意势力创建新军队
 [*] 修改势力金库：增减或直接设为指定数值；效果包、税率、揭示整张地图
@@ -74,7 +73,6 @@ Source code, pack builder and tests: [url=https://github.com/thomastamht/rome2-c
 [h2]限制——请务必阅读[/h2]
 [list]
 [*] ROME II 的脚本接口没有战役传送功能，所以地图上的军队不能拖动。请在游戏里行军，行动力不够时在角色面板点「补满行动力」。
-[*] 杀死自己的派系领袖可能导致游戏崩溃。「杀死角色」请只对 AI 角色使用，并先存档。
 [*] 部分命令存在于游戏脚本接口，但参数顺序来自阿提拉时期的文档，尚未在 ROME II 上确认。界面里不再单独标出，尚未验证的命令清单见项目仓库中的 TESTING.md。
 [*] 仅限单人战役，多人战役使用会不同步。
 [*] 只有 Chromium 内核浏览器（Chrome、Edge）支持网页端所需的文件夹访问。

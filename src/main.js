@@ -9,9 +9,6 @@ import { buildingDisplayName, cultureDisplayName, factionDisplayName, loadLoc, p
 
 const i18n = createI18n(localStorage.getItem("r2we.lang") || detectLanguage(navigator.language ?? ""));
 const t = i18n.t;
-// The bridge refuses every request for 5 s after a kill or dismantle (reading the model while the
-// game tears the object down crashed Rome II); wait that out before refreshing.
-const DESTRUCTIVE_SETTLE_MS = 5500;
 
 // The app starts disconnected: no bridge, no data, only the campaign map image. `?demo=1` is a
 // development hook that answers from src/sample.js instead of a real bridge folder.
@@ -370,16 +367,13 @@ async function loadAllNow() {
   renderAll();
 }
 
-// `settle` delays the follow-up refresh so the game can finish processing a destructive command first.
-async function run(type, args = {}, { refresh = true, label, settle = 0 } = {}) {
+async function run(type, args = {}, { refresh = true, label } = {}) {
   if (!state.bridge) { toast(t("notConnected")); return null; }
   busy(1);
   try {
     const result = assertOk(await state.bridge.request(type, args), label ?? type);
     pushLog(type, args, result);
     toast(`${label ?? type}: OK`);
-    if (type === "kill_character" && state.selected?.item?.cqi === args.cqi) state.selected = null;
-    if (settle) await new Promise(r => setTimeout(r, settle));
     if (refresh) await loadAll(); else renderAll();
     return result;
   } catch (e) {
@@ -413,9 +407,6 @@ function toast(message) {
 }
 
 // ---------------------------------------------------------------- drawer (selection panel)
-
-// Killing the player's own characters or any faction leader crashed Rome II in testing; the bridge refuses too.
-const killProtected = (c) => Boolean(c.faction_leader || state.factions.find(f => f.key === c.faction)?.is_human);
 
 function action(icon, label, type, attrs = "") {
   return `<button class="action" data-run="${type}" ${attrs} ${can(type) ? "" : "disabled"}><i>${icon}</i><span>${label}</span></button>`;
@@ -468,9 +459,6 @@ function characterDrawer(c) {
       <div class="action-list">
         ${dialogAction("▲", t(c.is_agent ? "agentExperience" : "generalExperience"), "experience", "add_agent_experience", `data-cqi="${c.cqi}"`)}
         ${c.has_force ? dialogAction("▲", t("unitExperience"), "unitExperience", "add_force_experience", `data-cqi="${c.cqi}"`) : ""}
-        ${killProtected(c)
-          ? `<button class="action" disabled title="${t("killProtected")}"><i>☠</i><span>${t("kill")} · ${t("killProtected")}</span></button>`
-          : action("☠", t("kill"), "kill_character", `data-args='{"cqi":${c.cqi}}' data-confirm="kill" data-settle="${DESTRUCTIVE_SETTLE_MS}"`)}
         ${action("↻", t("replenish"), "replenish_action_points", `data-args='{"cqi":${c.cqi}}' data-norefresh="1"`)}
         ${action("∅", t("zeroAp"), "zero_action_points", `data-args='{"cqi":${c.cqi}}' data-norefresh="1"`)}
       </div>
@@ -514,33 +502,19 @@ function slotsHtml(r) {
   return slots.map(s => `<div class="slot-row"><span class="slot-index">${s.index + 1}</span>${s.building
     ? `<span title="${esc(s.building)}">${esc(buildingName(s.building, owner))}</span>`
     : `<span class="muted">${t("emptySlot")}</span>`}<span class="slot-actions">${
-    button(s, "repair", "⚒", t("repairBuilding"), s.building && can("repair_building"))}${
-    button(s, "dismantle", "✕", t("dismantle"), s.building && can("dismantle_building"))}</span></div>`).join("");
+    button(s, "repair", "⚒", t("repairBuilding"), s.building && can("repair_building"))}</span></div>`).join("");
 }
 
 const buildingName = (key, owner) => buildingDisplayName(key, owner?.culture, owner?.subculture) ?? key;
 
-function reloadSlots(regionKey) {
-  slotCache.delete(regionKey);
-  loadSlots(regionKey);
-}
-
-async function slotAction(kind, r, index) {
-  const slots = slotCache.get(r.key);
-  const slot = Array.isArray(slots) ? slots.find(s => s.index === index) : undefined;
-  const owner = state.factions.find(f => f.key === r.owner);
-  const type = kind === "repair" ? "repair_building" : "dismantle_building";
+async function repairSlot(r, index) {
+  const type = "repair_building";
   const args = { region: r.key, slot: index };
-  if (kind === "dismantle" && !confirm(`${t("dismantle")}: ${buildingName(slot?.building, owner)}?`)) return;
   busy(1);
   try {
     const res = assertOk(await state.bridge.request(type, args), type);
     pushLog(type, args, res);
-    toast(`${t(kind === "repair" ? "repairBuilding" : "dismantle")}: OK`);
-    if (kind === "dismantle") {
-      await new Promise(done => setTimeout(done, DESTRUCTIVE_SETTLE_MS));
-      reloadSlots(r.key);
-    }
+    toast(`${t("repairBuilding")}: OK`);
   } catch (e) {
     pushLog(type, args, null, e.message);
     toast(e.message);
@@ -694,7 +668,6 @@ function bindActions(scope) {
   });
   scope.querySelectorAll("[data-run]").forEach(b => b.onclick = async () => {
     const type = b.dataset.run;
-    if (b.dataset.confirm && !confirm(b.dataset.confirm === "kill" ? t("killConfirm") : `${type}?`)) return;
     let args = b.dataset.args ? JSON.parse(b.dataset.args) : {};
     if (b.dataset.treasury) {
       const f = state.selected?.item;
@@ -710,11 +683,11 @@ function bindActions(scope) {
         ? { a, b: bb, kind: scope.querySelector("#diploKind").value, offer: scope.querySelector("#diploOffer").checked, accept: scope.querySelector("#diploAccept").checked }
         : { a, b: bb };
     }
-    await run(type, args, { refresh: !b.dataset.norefresh, settle: Number(b.dataset.settle) || 0 });
+    await run(type, args, { refresh: !b.dataset.norefresh });
   });
   scope.querySelectorAll("[data-slot]").forEach(b => b.onclick = () => {
     const r = state.selected?.kind === "region" ? state.selected.item : null;
-    if (r) slotAction(b.dataset.slot, r, Number(b.dataset.index));
+    if (r) repairSlot(r, Number(b.dataset.index));
   });
   scope.querySelectorAll("[data-dialog]").forEach(b => b.onclick = () => {
     const c = b.dataset.cqi ? state.characters.find(x => x.cqi === Number(b.dataset.cqi)) : null;

@@ -48,12 +48,12 @@ M.capabilities = {
   apply_effect_bundle = "verified", remove_effect_bundle = "verified",
   make_region_visible_in_shroud = "verified", show_shroud = "verified", scroll_camera = "verified",
   force_rebellion_in_region = "verified",
-  kill_character = "engine", force_make_vassal = "engine", force_add_trait = "engine",
+  force_make_vassal = "engine", force_add_trait = "engine",
   force_add_ancillary = "engine", grant_unit = "engine", add_development_points_to_region = "engine",
   set_tax_rate = "engine", hide_character = "engine", unhide_character = "engine", award_experience_level = "engine",
   add_agent_experience = "verified", add_force_experience = "engine",
-  instantly_repair_building = "engine", instantly_dismantle_building = "engine", end_turn = "engine",
-  get_settlement_slots = "verified", repair_building = "verified", dismantle_building = "experimental",
+  instantly_repair_building = "engine", end_turn = "engine",
+  get_settlement_slots = "verified", repair_building = "verified",
   relocate_force = "composed", relocate_status = "verified",
   move_force = "engine", move_status = "verified", join_garrison = "engine", leave_garrison = "engine",
 }
@@ -105,7 +105,6 @@ function M.debug(msg)
   if out and out.ting then out.ting("[rome2_web_editor] " .. tostring(msg)) end
 end
 local log = M.debug
-
 function M.configure(folder, kind)
   M.folder        = folder
   M.folder_kind   = kind
@@ -166,11 +165,10 @@ local function run_handler(fn, data)
   return { ok = false, error = tostring(result) }
 end
 
--- Every request is held back for a while after a destructive command: reading a character or
--- building the game is still tearing down crashed Rome II 2-4 s after kill_character and
--- instantly_dismantle_building, so 1.5 s and a read-only allow-list were not enough.
+-- Every request is held back for a while after relocate_force kills the original general, so
+-- nothing reads the model while the game processes the death.
 M.hold_until = nil
-M.removed = { characters = {}, slots = {} }
+M.removed = { characters = {} }
 local HOLD_SECONDS = 5
 local function hold_model_reads(seconds)
   M.hold_until = os.clock() + (seconds or HOLD_SECONDS)
@@ -280,12 +278,10 @@ local function find_region(key)
   return r
 end
 
--- A killed character stays in its faction's character_list for the rest of the session, and
--- reading anything beyond cqi() from it crashes Rome II. The same goes for a dismantled slot's
--- building. Both are remembered here and never touched again; reset when a campaign loads.
-local function forget_removed() M.removed = { characters = {}, slots = {} } end
+-- A general killed by relocate_force stays in its faction's character_list for the rest of the
+-- session; it is hidden from every list and refused as a target. Reset when a campaign loads.
+local function forget_removed() M.removed = { characters = {} } end
 local function is_removed_character(cqi) return M.removed.characters[tostring(cqi)] == true end
-local function slot_id(region_key, index) return region_key .. "#" .. tostring(index) end
 
 local function find_character(cqi)
   local wanted = tostring(cqi)
@@ -569,12 +565,6 @@ M.handlers.instantly_repair_building = function(data)
   return ok({ region = region })
 end
 
-M.handlers.instantly_dismantle_building = function(data)
-  local region = require_arg(data, "region", "string")
-  gi():instantly_dismantle_building(region)
-  return ok({ region = region })
-end
-
 -- Same calls as CA's garrison_has_building (lua_scripts\lib_export_triggers.lua). Rome II has no
 -- script call that places or upgrades a building (no region_slot_instantly_upgrade_building).
 M.handlers.get_settlement_slots = function(data)
@@ -585,7 +575,7 @@ M.handlers.get_settlement_slots = function(data)
   for i = 0, list:num_items() - 1 do
     local slot = list:item_at(i)
     local entry = { index = i, type = safe(function() return slot:type() end), name = safe(function() return slot:name() end) }
-    if not M.removed.slots[slot_id(key, i)] and safe(function() return slot:has_building() end, false) then
+    if safe(function() return slot:has_building() end, false) then
       local b = slot:building()
       entry.building = safe(function() return b:name() end)
       entry.chain = safe(function() return b:chain() end)
@@ -604,9 +594,7 @@ end
 
 local function require_building(region_key, index)
   local slot = slot_at(region_key, index)
-  if M.removed.slots[slot_id(region_key, index)] or not safe(function() return slot:has_building() end, false) then
-    error("slot " .. index .. " has no building")
-  end
+  if not safe(function() return slot:has_building() end, false) then error("slot " .. index .. " has no building") end
   return slot, slot:building():name()
 end
 
@@ -618,20 +606,6 @@ M.handlers.repair_building = function(data)
   local _, building = require_building(region, index)
   gi():instant_set_building_health_percent(region, building, 100)
   return ok({ region = region, slot = index, building = building, percent = 100 })
-end
-
--- instantly_dismantle_building has no CA or DEI call site. In game (region_key, building_key) raised
--- an argument error and the slot object removed the building. The slot is reported empty from now
--- on without reading it (M.removed), so a building constructed there later this session is not shown.
-M.handlers.dismantle_building = function(data)
-  local region = require_arg(data, "region", "string")
-  local index = require_arg(data, "slot", "number")
-  local slot, building = require_building(region, index)
-  log("dismantle_building " .. region .. " slot " .. index .. " " .. building)
-  gi():instantly_dismantle_building(slot)
-  M.removed.slots[slot_id(region, index)] = true
-  hold_model_reads()
-  return ok({ region = region, slot = index, building = building })
 end
 
 -------------------------------------------------------------------------------
@@ -695,24 +669,6 @@ M.handlers.zero_action_points = function(data)
   local cqi = require_arg(data, "cqi", "number")
   find_character(cqi)
   gi():zero_action_points(char_str(cqi))
-  return ok({ cqi = cqi })
-end
-
--- Killing the player's own characters crashed Rome II twice in testing (faction leader cqi 5 at
--- 00:38, general cqi 3 at 03:10 — both human faction, both followed by a snapshot). AI characters
--- only, unless the caller insists; and model reads are held back while the game processes the death.
-M.handlers.kill_character = function(data)
-  local cqi = require_arg(data, "cqi", "number")
-  local destroy_force = data.destroy_force ~= false
-  local c = find_character(cqi)
-  local is_leader = safe(function() return c:is_faction_leader() end, false)
-  local is_human = safe(function() return c:faction():is_human() end, false)
-  if is_human and not data.allow_player then error("refusing to kill a player character (crashes the game)") end
-  if is_leader and not data.allow_leader then error("refusing to kill a faction leader (crashes the game)") end
-  log("kill_character cqi " .. cqi .. " destroy_force=" .. tostring(destroy_force))
-  gi():kill_character(char_str(cqi), destroy_force)
-  M.removed.characters[tostring(cqi)] = true
-  hold_model_reads()
   return ok({ cqi = cqi })
 end
 

@@ -66,15 +66,13 @@ mkdir "D:\Steam\steamapps\common\Total War Rome II\data\campaigns\main_rome\rome
 | 外交 → 点势力 → 揭示整张地图 | 迷雾消失 | shroud 接口问题 |
 | 控制台 → `show_shroud {"visible": false}` / `{"visible": true}` | 全图迷雾开关 | `show_shroud` |
 
-### C. 角色面板（点地图上的将领，右侧只有 5 个操作）
+### C. 角色面板（点地图上的将领，右侧最多 4 个操作）
 
 | 操作 | 期望 |
 |---|---|
 | 清空行动力 → 补满行动力（对自己将军） | 移动范围先消失再恢复（已验证） |
 | 将军经验（填 100） | 将军经验条 / 等级立即变化；失败 → `add_agent_experience` |
 | 士兵经验（填 1） | 全军每个单位立即 +1 个 V 字章；失败 → `award_experience_level` 参数顺序 |
-| 城镇面板 →「向驻军添加单位」→ 搜 `hastati` → 点「青年兵 Rom_Hastati」（游戏窗口要在前台，不要最小化） | 该城驻军多一队（控制台 `get_force_units {"cqi":<驻军 colonel 的 cqi>}` 也能看到）。野外军队的「向军队添加单位」应是灰的并注明「罗马2不支持」：Rome II 脚本只有 `CCQ_SCRIPTING_CREATE_UNIT_AT_SETTLEMENT`，2026-10-21 实测 `character_cqi` 目标静默无效 |
-| 杀死（挑一个 **AI 小势力**将军，先存档） | 军队消失。**不要对玩家派系领袖用**：2026-10-21 00:38 杀玩家领袖后点击军队即崩溃 |
 | 右键地图空地 → 创建军队（弹窗里从单位列表点选，或直接填 `Rom_Hastati,Rom_Hastati,Rom_Principes`） | 目标地区附近出现新军队。失败且提示坐标 → 看逻辑坐标是否离谱（应与同地区角色的 logical 接近） |
 
 单位列表默认「仅本体兵种」（1 500 多个原版 / DLC 单位，含中文名）；取消勾选可看到已装 Mod（如 DEI）的全部单位。

@@ -182,78 +182,6 @@ test("relocate_force refuses faction leaders and player armies unless explicitly
   assert.equal(vm.evalJson(`CALLS`).length, 0, "nothing reached the game");
 });
 
-test("kill_character refuses player characters and leaders, and holds every request for 5 s afterwards", () => {
-  const vm = newVm();
-  vm.run(`FIRE("FirstTickAfterWorldCreated", {})`);
-  vm.request({ type: "kill_character", request_id: 9, cqi: 102 });           // Rome spy: human faction
-  assert.match(vm.response().result.error, /player character/);
-  vm.request({ type: "kill_character", request_id: 10, cqi: 101, allow_player: true });  // leader
-  assert.match(vm.response().result.error, /faction leader/);
-  assert.equal(vm.evalJson(`CALLS`).some(c => c.name === "kill_character"), false, "nothing reached the game");
-
-  vm.request({ type: "kill_character", request_id: 11, cqi: 201 });          // Carthage AI general
-  assert.deepEqual(vm.response().result, { ok: true, cqi: 201 });
-  assert.deepEqual(vm.evalJson(`CALLS[#CALLS]`), { name: "kill_character", args: ["character_cqi:201", true] });
-
-  vm.request({ type: "get_active_characters", request_id: 12 });
-  assert.equal(vm.response().request_id, 11, "snapshot-style reads are deferred while the game settles the death");
-  vm.request({ type: "heartbeat", request_id: 13 });
-  assert.equal(vm.response().request_id, 11, "any request is held");
-  vm.run(`CLOCK = CLOCK + 3`);
-  vm.request({ type: "get_settlement_slots", request_id: 15, region: "rom_italia_latium" });
-  assert.equal(vm.response().request_id, 11, "still held after 3 s (the game crashed 2-4 s after a kill)");
-  vm.run(`CLOCK = CLOCK + 2`);
-  vm.request({ type: "get_active_characters", request_id: 14 });
-  assert.equal(vm.response().request_id, 14, "reads resume once the hold has elapsed");
-});
-
-// The killed character stays in character_list and anything but cqi() on it crashes Rome II.
-const ZOMBIFY = (cqi) => `ZOMBIE_READS = 0
-for _, c in ipairs(FACTIONS.rom_carthage.chars) do
-  if c.cqi() == ${cqi} then for k in pairs(c) do if k ~= "cqi" then c[k] = function() ZOMBIE_READS = ZOMBIE_READS + 1 error("CRASH") end end end end
-end`;
-
-test("a killed character is never read again: skipped in lists, refused by every cqi request", () => {
-  const vm = newVm();
-  vm.run(`FIRE("FirstTickAfterWorldCreated", {})`);
-  vm.request({ type: "kill_character", request_id: 20, cqi: 201 });
-  assert.equal(vm.response().result.ok, true);
-  vm.run(ZOMBIFY(201));
-  vm.run(`CLOCK = CLOCK + 5`);
-  vm.request({ type: "get_active_characters", request_id: 21 });
-  const chars = vm.response().result;
-  assert.ok(Array.isArray(chars));
-  assert.equal(chars.some(c => c.cqi === 201), false);
-  vm.request({ type: "get_snapshot", request_id: 22 });
-  assert.equal(vm.response().result.characters.some(c => c.cqi === 201), false);
-  for (const [i, type] of ["get_force_units", "replenish_action_points", "add_agent_experience", "kill_character"].entries()) {
-    vm.request({ type, request_id: 30 + i, cqi: 201, points: 10 });
-    assert.match(vm.response().result.error, /character was killed/, type);
-  }
-  assert.deepEqual(vm.evalJson(`{ n = ZOMBIE_READS }`), { n: 0 }, "nothing but cqi() was read from the killed character");
-
-  vm.run(`FIRE("UIDestroyed", {})`);
-  vm.run(`FIRE("FirstTickAfterWorldCreated", {})`);
-  assert.deepEqual(vm.evalJson(`{ n = (function() local n = 0 for _ in pairs(M.removed.characters) do n = n + 1 end return n end)() }`), { n: 0 }, "a loaded campaign starts clean");
-});
-
-test("a dismantled slot is reported empty without reading its building again", () => {
-  const vm = newVm();
-  vm.run(`FIRE("FirstTickAfterWorldCreated", {})`);
-  vm.request({ type: "dismantle_building", request_id: 40, region: "rom_italia_latium", slot: 0 });
-  assert.equal(vm.response().result.ok, true);
-  vm.run(`local s = REGIONS.rom_italia_latium.slots[1]; s.building = "rom_ROMAN_city_major_1"`);
-  vm.run(`SLOT_READS = 0; REGIONS.rom_italia_latium.slot_list = (function(orig) return function() local l = orig(); local first = l:item_at(0); first.building = function() SLOT_READS = SLOT_READS + 1 error("CRASH") end; return l end end)(REGIONS.rom_italia_latium.slot_list)`);
-  vm.run(`CLOCK = CLOCK + 5`);
-  vm.request({ type: "get_settlement_slots", request_id: 41, region: "rom_italia_latium" });
-  assert.deepEqual(vm.response().result.slots[0], { index: 0 });
-  vm.request({ type: "repair_building", request_id: 42, region: "rom_italia_latium", slot: 0 });
-  assert.match(vm.response().result.error, /slot 0 has no building/);
-  vm.request({ type: "dismantle_building", request_id: 43, region: "rom_italia_latium", slot: 0 });
-  assert.match(vm.response().result.error, /slot 0 has no building/);
-  assert.deepEqual(vm.evalJson(`{ n = SLOT_READS }`), { n: 0 });
-});
-
 test("relocate_force queues create_force, waits for ScriptedForceCreated, then kills the original on a later tick", () => {
   const vm = newVm();
   vm.run(`FIRE("FirstTickAfterWorldCreated", {})`);
@@ -281,7 +209,13 @@ test("relocate_force queues create_force, waits for ScriptedForceCreated, then k
   assert.equal(vm.evalJson(`CALLS`).some(c => c.name === "kill_character"), false, "no kill in the creation event");
   vm.run(`FIRE("TimeTrigger", { string = "rome2_web_editor_kill:${id}" })`);
   assert.deepEqual(vm.evalJson(`CALLS[#CALLS]`), { name: "kill_character", args: ["character_cqi:101", true] });
+  vm.request({ type: "heartbeat", request_id: 14 });
+  assert.equal(vm.response().request_id, 13, "every request waits while the game processes the death");
   vm.run(`CLOCK = CLOCK + 5`);
+  vm.request({ type: "get_active_characters", request_id: 15 });
+  assert.equal(vm.response().result.some(c => c.cqi === 101), false, "the killed general lingers in character_list but is hidden");
+  vm.request({ type: "replenish_action_points", request_id: 16, cqi: 101 });
+  assert.match(vm.response().result.error, /character was killed/);
   vm.request({ type: "relocate_status", request_id: 11, id });
   assert.deepEqual(vm.response().result, { ok: true, id, status: "done", new_cqi: 900, original_cqi: 101 });
   vm.request({ type: "relocate_force", request_id: 12, cqi: 102, region: "rom_africa_zeugitana", x: 1, y: 1, allow_player: true });
@@ -402,7 +336,7 @@ test("settlement slots list buildings", () => {
   });
 });
 
-test("per-slot building edits: repair sets health to 100 with the verified 3-argument call, dismantle passes the slot and holds reads", () => {
+test("per-slot repair sets health to 100 with the verified 3-argument call", () => {
   const vm = newVm();
   vm.run(`FIRE("FirstTickAfterWorldCreated", {})`);
   vm.request({ type: "repair_building", request_id: 70, region: "rom_italia_latium", slot: 0 });
@@ -411,21 +345,12 @@ test("per-slot building edits: repair sets health to 100 with the verified 3-arg
   vm.request({ type: "repair_building", request_id: 71, region: "rom_italia_latium", slot: 1 });
   assert.match(vm.response().result.error, /slot 1 has no building/);
 
-  vm.request({ type: "dismantle_building", request_id: 73, region: "rom_italia_latium", slot: 0 });
-  assert.deepEqual(vm.response().result, { ok: true, region: "rom_italia_latium", slot: 0, building: "rom_ROMAN_city_major_1" });
-  assert.deepEqual(vm.evalJson(`{ name = CALLS[#CALLS].name, slot_building = CALLS[#CALLS].args[1].state == REGIONS.rom_italia_latium.slots[1] }`), { name: "instantly_dismantle_building", slot_building: true });
-  vm.request({ type: "get_settlement_slots", request_id: 74, region: "rom_italia_latium" });
-  assert.equal(vm.response().request_id, 73, "slot reads wait for the hold");
-  vm.run(`CLOCK = CLOCK + 5`);
-  vm.request({ type: "get_settlement_slots", request_id: 76, region: "rom_italia_latium" });
-  assert.deepEqual(vm.response().result.slots, [{ index: 0 }, { index: 1 }]);
-  vm.request({ type: "dismantle_building", request_id: 75, region: "rom_italia_latium", slot: 5 });
-  assert.match(vm.response().result.error, /slot 5 out of range/);
 });
 
-test("construction and UI-probe handlers are gone", () => {
+test("removed handlers are gone: construction, UI probes, kill and dismantle", () => {
   const vm = newVm();
-  const gone = ["construction_options", "construct_building", "construction_status", "set_building_health", "ui_tree", "ui_find", "ui_click", "ui_key", "ui_panels"];
+  const gone = ["construction_options", "construct_building", "construction_status", "set_building_health", "ui_tree", "ui_find", "ui_click", "ui_key", "ui_panels",
+    "kill_character", "dismantle_building", "instantly_dismantle_building"];
   const left = vm.evalJson(`(function() local t = {} for _, k in ipairs(${JSON.stringify(gone).replace("[", "{").replace("]", "}")}) do if M.handlers[k] or M.capabilities[k] then table.insert(t, k) end end return { left = t } end)()`);
   assert.deepEqual(left.left ?? [], []);
 });
