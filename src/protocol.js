@@ -59,6 +59,20 @@ export class FileBridge {
     }
   }
 
+  /**
+   * The ready marker only survives until the game answers its first request, so a campaign that
+   * has already been used is detected by asking for a heartbeat instead.
+   */
+  async isAlive() {
+    if (await this.readReadyMarker()) return true;
+    try {
+      const beat = await this.request("heartbeat");
+      return Boolean(beat && beat.ok !== false);
+    } catch {
+      return false;
+    }
+  }
+
   async writeRequest(payload) {
     const handle = await this.directory.getFileHandle(REQUEST_FILE, { create: true });
     const writer = await handle.createWritable();

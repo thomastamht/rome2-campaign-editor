@@ -44,6 +44,18 @@ test("readReadyMarker returns the result only for request_id 0 ready markers", a
   assert.equal(await empty.readReadyMarker(), null);
 });
 
+test("isAlive accepts the ready marker, or a heartbeat answer once the marker is overwritten", async () => {
+  assert.equal(await new FileBridge(fakeDirectory('{"request_id":0,"result":{"status":"ready"}}')).isAlive(), true);
+
+  const used = fakeDirectory('{"request_id":265747,"result":{"regions":[]}}');
+  const live = new FileBridge(used, { interval: 1, retries: 5, sleep: async () => used.answer(() => ({ ok: true, game: "rome2" })) });
+  assert.equal(await live.isAlive(), true);
+  assert.equal(used.writes.at(-1).type, "heartbeat");
+
+  const gone = new FileBridge(fakeDirectory('{"request_id":265747,"result":{}}'), { interval: 1, retries: 3, sleep: async () => {} });
+  assert.equal(await gone.isAlive(), false);
+});
+
 test("request writes request.json, waits for the matching request_id and ignores stale/partial responses", async () => {
   const dir = fakeDirectory('{"request_id":1,"result":"stale"}');
   let ticks = 0;

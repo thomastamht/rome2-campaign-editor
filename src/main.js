@@ -283,7 +283,7 @@ async function rememberDirectory(dir) {
 
 async function useDirectory(dir, { quiet = false } = {}) {
   const bridge = new FileBridge(dir);
-  const ready = await bridge.readReadyMarker();
+  const ready = await bridge.isAlive();
   state.bridge = bridge;
   state.mode = "live";
   state.selected = null;
