@@ -155,6 +155,7 @@ test("positions_only follows the same characters and leaves out names and forces
   assert.equal(general.units, undefined);
   assert.equal(general.in_settlement, false);
   assert.deepEqual([general.x, general.y, general.lx, general.ly], [421.5, 312.25, 42, 31]);
+  assert.equal(general.region, "rom_italia_latium", "region follows a walking army");
   assert.ok(chars.some(c => c.cqi === 102));
   assert.ok(!chars.some(c => c.cqi === 103));
 });

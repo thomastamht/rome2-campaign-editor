@@ -135,7 +135,7 @@ function mountMap() {
   map = new MapView(canvas, {
     onHover: (hit, e) => tooltip(hit, e),
     onSelect: (hit) => onMarkerClick(hit),
-    onEmptyClick: (world, fraction) => onEmptyClick(world, fraction),
+    onEmptyClick: () => onEmptyClick(),
     onContextMenu: (world, hit) => createForceDialog(world, hit),
   });
   setFlagReadyCallback(() => map?.draw());
@@ -498,12 +498,12 @@ function slotsHtml(r) {
   if (slots === "loading") return `<small>…</small>`;
   if (typeof slots === "string") return `<small>${esc(slots)}</small>`;
   const owner = state.factions.find(f => f.key === r.owner);
-  const button = (s, kind, icon, label, show) => show ? `<button class="ghost slot-btn" data-slot="${kind}" data-index="${s.index}" title="${esc(label)}">${icon}</button>` : "";
   // The script API cannot read a building's health, so repair is offered on every building.
+  const repair = (s) => s.building && can("repair_building")
+    ? `<button class="ghost slot-btn" data-slot data-index="${s.index}" title="${esc(t("repairBuilding"))}">⚒</button>` : "";
   return slots.map(s => `<div class="slot-row"><span class="slot-index">${s.index + 1}</span>${s.building
     ? `<span title="${esc(s.building)}">${esc(buildingName(s.building, owner))}</span>`
-    : `<span class="muted">${t("emptySlot")}</span>`}<span class="slot-actions">${
-    button(s, "repair", "⚒", t("repairBuilding"), s.building && can("repair_building"))}</span></div>`).join("");
+    : `<span class="muted">${t("emptySlot")}</span>`}<span class="slot-actions">${repair(s)}</span></div>`).join("");
 }
 
 const buildingName = (key, owner) => buildingDisplayName(key, owner?.culture, owner?.subculture) ?? key;
@@ -621,16 +621,6 @@ function consoleView() {
 
 // ---------------------------------------------------------------- bindings
 
-function selectAndCenter(sel) {
-  state.selected = sel;
-  state.sheet = null;
-  renderSheet();
-  renderDrawer();
-  feedMap();
-  const at = sel ? mapPos(sel.item) : null;
-  if (at && Number.isFinite(at.x)) map?.centerOn(at.x, at.y, Math.max(map.view.zoom, 3));
-}
-
 function bindActions(scope) {
   scope.querySelector("#search")?.addEventListener("input", e => {
     state.search = e.target.value;
@@ -638,15 +628,10 @@ function bindActions(scope) {
     renderSheet();
     const x = document.querySelector("#search"); x?.focus(); x?.setSelectionRange(pos, pos);
   });
-  scope.querySelector("#factionFilter")?.addEventListener("change", e => { state.factionFilter = e.target.value; renderSheet(); feedMap(); updateHeader(); });
   scope.querySelector("#diploB")?.addEventListener("change", e => { state.diploB = e.target.value; });
   scope.querySelectorAll("[data-select-faction]").forEach(b => b.onclick = () => {
     const f = state.factions.find(x => x.key === b.dataset.selectFaction);
     state.selected = f ? { kind: "faction", item: f } : null; renderDrawer();
-  });
-  scope.querySelectorAll("[data-select-region]").forEach(b => b.onclick = () => {
-    const r = state.regions.find(x => x.key === b.dataset.selectRegion);
-    if (r) selectAndCenter({ kind: "region", item: r });
   });
   scope.querySelectorAll("[data-run]").forEach(b => b.onclick = async () => {
     const type = b.dataset.run;
@@ -714,7 +699,7 @@ function followCampaign() {
 
 function stepWatch() {
   if (!watchOn || state.mode !== "live" || !state.bridge) { watchOn = false; return; }
-  const run = state.busy > 0 ? Promise.resolve(true) : refreshCharacters({ quiet: true });
+  const run = state.busy > 0 ? Promise.resolve(true) : refreshCharacters();
   run.finally(() => {
     if (!watchOn) return;
     const gap = watchFailures ? Math.min(8000, WATCH_MS * 2 ** watchFailures) : WATCH_MS;
@@ -732,9 +717,10 @@ function applyCharacterWatch(incoming) {
   const known = new Set(state.characters.map(c => c.cqi));
   if (incoming.some(c => !known.has(c.cqi))) return false;
   const byCqi = new Map(incoming.map(c => [c.cqi, c]));
+  // region is left out of the reply at sea, so it is copied even when missing
   state.characters = state.characters
     .filter(c => byCqi.has(c.cqi))
-    .map(c => ({ ...c, ...byCqi.get(c.cqi) }));
+    .map(c => { const p = byCqi.get(c.cqi); return { ...c, ...p, region: p.region }; });
   return true;
 }
 
@@ -748,16 +734,15 @@ function syncLiveSelection(hadCharacter) {
   const pos = document.querySelector("#charPos div");
   if (pos) pos.textContent = `${c.lx}, ${c.ly}`;
   const region = document.querySelector("#charRegion div");
-  if (region && c.region) region.textContent = regionName(c.region);
+  if (region) region.textContent = regionName(c.region);
 }
 
-/** Cheaper than loadAll: only positions/forces change after a character action. */
-async function refreshCharacters({ quiet = false } = {}) {
+/** Positions only; a full fetch happens only when a character the browser has not seen appears. */
+async function refreshCharacters() {
   try {
-    let characters = await state.bridge.request("get_active_characters", quiet ? { positions_only: true } : {});
+    let characters = await state.bridge.request("get_active_characters", { positions_only: true });
     if (!Array.isArray(characters)) return false;
-    if (!quiet) state.characters = characters;
-    else if (applyCharacterWatch(characters) === false) {
+    if (applyCharacterWatch(characters) === false) {
       characters = await state.bridge.request("get_active_characters");
       if (!Array.isArray(characters)) return false;
       state.characters = characters;
@@ -769,13 +754,11 @@ async function refreshCharacters({ quiet = false } = {}) {
       state.selected = fresh && !isGarrison(fresh) ? { kind: "character", item: fresh } : null;
     }
     feedMap();
-    if (quiet) syncLiveSelection(hadCharacter);
-    else renderDrawer();
+    syncLiveSelection(hadCharacter);
     watchFailures = 0;
     return true;
-  } catch (e) {
-    if (quiet) watchFailures += 1;
-    else toast(e.message);
+  } catch {
+    watchFailures += 1;
     return false;
   }
 }
@@ -816,11 +799,11 @@ function bindUnitPicker(dlg, onPick) {
     const rows = unitCatalogue({ baseGameOnly: base.checked }).filter(u => !q || u.name.toLowerCase().includes(q) || u.key.toLowerCase().includes(q)).slice(0, 300);
     list.innerHTML = rows.map(u => `<button type="button" class="unit-row" data-unit="${esc(u.key)}"><b>${esc(u.name)}</b><small>${esc(u.key)}${u.game ? "" : " · mod"}</small></button>`).join("")
       || `<p class="muted">—</p>`;
-    list.querySelectorAll("[data-unit]").forEach(b => b.onclick = () => onPick(b.dataset.unit, b));
+    list.querySelectorAll("[data-unit]").forEach(b => b.onclick = () => onPick(b.dataset.unit));
   };
   filter.oninput = render;
   base.onchange = render;
-render();
+  render();
 }
 
 function createForceDialog(world, hit) {

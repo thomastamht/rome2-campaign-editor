@@ -102,20 +102,6 @@ export function inferRegionPositions(regions, characters) {
 
 const DRAG_THRESHOLD = 4;
 
-/** Two (display, image-fraction) pairs -> edge coordinates of the image. Fractions: 0..1 from left / from top. */
-export function boundsFromPairs(pairs) {
-  if (pairs.length < 2) return null;
-  const [a, b] = pairs;
-  const dfx = b.f.x - a.f.x, dfy = b.f.y - a.f.y;
-  if (Math.abs(dfx) < 0.02 || Math.abs(dfy) < 0.02) return null;   // points too close on one axis
-  const spanX = (b.d.x - a.d.x) / dfx;
-  const spanY = (a.d.y - b.d.y) / dfy;                              // image y grows downward, map y grows north
-  if (!(spanX > 0 && spanY > 0)) return null;
-  const minX = a.d.x - a.f.x * spanX;
-  const maxY = a.d.y + a.f.y * spanY;
-  return { minX, maxX: minX + spanX, minY: maxY - spanY, maxY };
-}
-
 const MAX_ZOOM = 40;     // zoom 1 = image fitted inside the view; the floor is the "cover" zoom (see minZoom)
 
 export class MapView {
@@ -183,14 +169,6 @@ export class MapView {
     this.view.panY = imgH <= height + 1 ? 0 : Math.min(Math.max(panY, height - br.py), -tl.py);
   }
 
-  /** Position of a canvas point inside the background image as fractions (0..1 from left / from top). */
-  imageFraction(px, py) {
-    if (!this.background) return null;
-    const b = this.background.bounds;
-    const w = this.project().fromCanvas(px, py);
-    return { x: (w.x - b.minX) / (b.maxX - b.minX), y: (b.maxY - w.y) / (b.maxY - b.minY) };
-  }
-
   /**
    * Campaign minimap drawn under the markers. `bounds` are the display coordinates at the image
    * edges (minX/minY = bottom-left, maxX/maxY = top-right), i.e. the campaign logical grid.
@@ -202,22 +180,9 @@ export class MapView {
     this.draw();
   }
 
-  setFlipY(flipY) { this.view.flipY = flipY; this.draw(); }
   resetView() { this.view.zoom = this.minZoom(); this.view.panX = 0; this.view.panY = 0; this.clampView(); this.draw(); }
   /** key: "character:<cqi>" | "region:<key>" | null */
   select(key) { this.selectedKey = key; this.draw(); }
-
-  centerOn(x, y, zoom) {
-    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-    if (zoom) this.view.zoom = zoom;
-    const { width, height } = this.size();
-    this.view.panX = 0; this.view.panY = 0;
-    const p = this.project().toCanvas(x, y);
-    this.view.panX = width / 2 - p.px;
-    this.view.panY = height / 2 - p.py;
-    this.clampView();
-    this.draw();
-  }
 
   size() {
     const rect = this.canvas.getBoundingClientRect();
@@ -300,7 +265,7 @@ export class MapView {
           this.selectedKey = `${pan.hit.kind}:${pan.hit.item.cqi ?? pan.hit.item.key}`;
           this.handlers.onSelect?.(pan.hit, e);
         } else {
-          this.handlers.onEmptyClick?.(this.project().fromCanvas(px, py), this.imageFraction(px, py), e);
+          this.handlers.onEmptyClick?.(this.project().fromCanvas(px, py), e);
         }
       }
       this.draw();

@@ -412,6 +412,10 @@ local function character_type_of(c)
   return nil
 end
 
+local function character_region(c)
+  return safe(function() local r = c:region(); if is_null(r) then return nil end; return r:name() end)
+end
+
 local function describe_character(c, faction_key)
   local has_force = safe(function() return c:has_military_force() end, false)
   local ctype = character_type_of(c)
@@ -431,7 +435,7 @@ local function describe_character(c, faction_key)
     embedded = safe(function() return c:is_embedded_in_military_force() end, false),
     faction_leader = safe(function() return c:is_faction_leader() end, false),
     age = safe(function() return c:age() end),
-    region = safe(function() local r = c:region(); if is_null(r) then return nil end; return r:name() end),
+    region = character_region(c),
     has_force = has_force,
     is_agent = AGENT_TYPES[ctype or ""] == true,
   }
@@ -457,7 +461,7 @@ local function character_on_map(c, cqi)
   return is_agent
 end
 
--- Coordinates only. The browser already has names and forces and merges these in.
+-- Coordinates and region only. The browser already has names and forces and merges these in.
 local function character_positions()
   local out_list = {}
   local factions = world():faction_list()
@@ -475,6 +479,7 @@ local function character_positions()
           lx = safe(function() return c:logical_position_x() end),
           ly = safe(function() return c:logical_position_y() end),
           in_settlement = safe(function() return c:in_settlement() end, false),
+          region = character_region(c),
         })
       end
     end

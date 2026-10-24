@@ -33,5 +33,3 @@ export function flagImage(factionKey) {
   img.src = `${base}flags/${encodeURIComponent(info.flag)}/mon_64.png`;
   return null;
 }
-
-export function _resetForTests(newIndex = {}) { index = newIndex; images.clear(); }

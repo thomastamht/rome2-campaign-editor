@@ -61,12 +61,6 @@ export function buildingDisplayName(key, culture = "", subculture = "") {
   return name;
 }
 
-export const unitDisplayName = (key) => {
-  const u = units[key];
-  if (!u) return locText(`land_units_onscreen_name_${key}`);
-  return tidy(u[dataLangOf(uiLang)] ?? u.en);
-};
-
 /** Character names arrive as names_name_<id> keys (or already-localised text). */
 export function personName(value) {
   if (!value) return "";
