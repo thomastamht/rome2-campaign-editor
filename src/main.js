@@ -536,21 +536,14 @@ function factionDrawer(f) {
       ${field(t("culture"), `${esc(f.culture_name)}${f.subculture_name && f.subculture_name !== f.culture_name ? ` · ${esc(f.subculture_name)}` : ""}`)}
       ${field(t("treasury"), fmt(f.treasury))}
       ${field(t("regionsCol"), `${f.regions} · ${t("forcesCol")} ${f.forces} · ${f.is_human ? t("human") : "AI"}${f.is_dead ? " · ✝" : ""}`)}
-      <h4>${t("actions")}</h4>
+      <h4>${t("nationalTreasury")}</h4>
       <div class="action-list">
-        <div class="action-row"><input type="number" id="adjust" value="5000" step="500">${action("±", t("adjust"), "treasury_mod", 'data-treasury="adjust"')}</div>
         <div class="action-row"><input type="number" id="setTo" value="${esc(f.treasury ?? 0)}" step="500">${action("=", t("setTo"), "treasury_mod", 'data-treasury="set"')}</div>
-        <div class="action-row"><input id="bundle" placeholder="effect bundle key"><input type="number" id="bundleTurns" value="0" style="width:60px">${action("✚", t("effectBundle"), "apply_effect_bundle", 'data-bundle="1"')}</div>
-        <div class="action-row"><input type="number" id="taxRate" value="2" min="0" max="4" style="width:60px">${action("¤", t("taxRate"), "set_tax_rate", 'data-tax="1"')}</div>
-        ${action("◉", t("revealAll"), "reveal_all_regions", `data-args='${esc(JSON.stringify({ faction: f.key }))}' data-norefresh="1"`)}
       </div>
       ${diplomacySection(f)}
     </div>`;
   return { title: t("faction"), html };
 }
-
-// Options force_diplomacy can allow or block; Rome II can only *force* war, peace, trade and vassalage.
-const DIPLOMACY_KINDS = ["war", "peace", "alliance", "defensive alliance", "military alliance", "non aggression pact", "trade agreement", "military access", "vassal", "client state", "break vassal", "break client state"];
 
 /** Faction drawer: forced diplomacy between the selected faction (A) and a chosen counterpart (B). */
 function diplomacySection(f) {
@@ -567,14 +560,6 @@ function diplomacySection(f) {
         ${action("☮", t("makePeace"), "force_make_peace", 'data-diplo="force_make_peace"')}
         ${action("⚖", t("trade"), "force_make_trade_agreement", 'data-diplo="force_make_trade_agreement"')}
         ${action("♜", t("vassal"), "force_make_vassal", `data-diplo="force_make_vassal" title="${esc(t("vassalHint"))}"`)}
-        <small class="section-label">${t("diplomacyOption")}</small>
-        <div class="action-row"><select id="diploKind">${DIPLOMACY_KINDS.map(k => `<option>${k}</option>`).join("")}</select></div>
-        <div class="action-row wrap">
-          <label class="toggle"><input type="checkbox" id="diploOffer" checked> ${t("offer")}</label>
-          <label class="toggle"><input type="checkbox" id="diploAccept" checked> ${t("accept")}</label>
-          ${action("✓", t("apply"), "force_diplomacy", 'data-diplo="force_diplomacy"')}
-        </div>
-        <p class="muted">${t("diplomacyLimit")}</p>
       </div>`;
 }
 
@@ -662,17 +647,12 @@ function bindActions(scope) {
     let args = b.dataset.args ? JSON.parse(b.dataset.args) : {};
     if (b.dataset.treasury) {
       const f = state.selected?.item;
-      const amount = b.dataset.treasury === "set" ? Number(scope.querySelector("#setTo").value) - Number(f?.treasury ?? 0) : Number(scope.querySelector("#adjust").value);
-      args = { faction: f?.key, amount };
+      args = { faction: f?.key, amount: Number(scope.querySelector("#setTo").value) - Number(f?.treasury ?? 0) };
     }
-    if (b.dataset.bundle) args = { bundle: scope.querySelector("#bundle").value.trim(), faction: state.selected?.item?.key, turns: Number(scope.querySelector("#bundleTurns").value) };
-    if (b.dataset.tax) args = { faction: state.selected?.item?.key, rate: Number(scope.querySelector("#taxRate").value) };
     if (b.dataset.diplo) {
       const a = state.selected?.item?.key, bb = scope.querySelector("#diploB").value;
       state.diploB = bb;
-      args = type === "force_diplomacy"
-        ? { a, b: bb, kind: scope.querySelector("#diploKind").value, offer: scope.querySelector("#diploOffer").checked, accept: scope.querySelector("#diploAccept").checked }
-        : { a, b: bb };
+      args = { a, b: bb };
     }
     await run(type, args, { refresh: !b.dataset.norefresh });
   });

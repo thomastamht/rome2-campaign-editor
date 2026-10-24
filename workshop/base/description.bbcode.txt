@@ -10,8 +10,8 @@ Web app: [b][url=https://thomastamht.github.io/rome2-campaign-editor/]https://th
 [*] Click an agent (spy / dignitary / champion): agent experience, replenish or zero action points
 [*] Click a settlement: transfer to another faction, public order, development points, repair, rebellion
 [*] Right-click the map to spawn a new army for any faction
-[*] Faction treasury: add / subtract / set an exact amount; effect bundles, tax rate, reveal the whole map
-[*] Diplomacy: force war, peace, trade agreement, vassalage; allow or block diplomatic options
+[*] Faction treasury: set an exact amount
+[*] Diplomacy: force war, peace, trade agreement, vassalage
 [*] Console tab: send any supported request by hand and read the raw reply
 [*] Settings: English / 简体中文 / 繁體中文 interface, auto-refresh
 [/list]
@@ -53,8 +53,8 @@ Source code, pack builder and tests: [url=https://github.com/thomastamht/rome2-c
 [*] 点特工（间谍 / 政要 / 勇士）：特工经验、补满 / 清空行动力
 [*] 点城市：转移归属、设置治安、增加发展点数、修复建筑、触发叛乱
 [*] 右键地图为任意势力创建新军队
-[*] 修改势力金库：增减或直接设为指定数值；效果包、税率、揭示整张地图
-[*] 外交：强制宣战、和平、贸易协定、附庸；允许或禁止外交选项
+[*] 修改势力国库：直接设为指定数值
+[*] 外交：强制宣战、和平、贸易协定、附庸
 [*] 控制台：手动发送任意受支持的请求并查看原始回复
 [*] 设定：English / 简体中文 / 繁體中文 界面、自动刷新
 [/list]
