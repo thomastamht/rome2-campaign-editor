@@ -170,6 +170,7 @@ end
 -- building the game is still tearing down crashed Rome II 2-4 s after kill_character and
 -- instantly_dismantle_building, so 1.5 s and a read-only allow-list were not enough.
 M.hold_until = nil
+M.removed = { characters = {}, slots = {} }
 local HOLD_SECONDS = 5
 local function hold_model_reads(seconds)
   M.hold_until = os.clock() + (seconds or HOLD_SECONDS)
@@ -189,6 +190,10 @@ function M.handle_request()
   local fn = M.handlers[data.type]
   if not fn then
     M.handle_response({ ok = false, error = "unknown request type: " .. tostring(data.type) })
+    return
+  end
+  if data.cqi ~= nil and M.removed.characters[tostring(data.cqi)] then
+    M.handle_response({ ok = false, error = "character was killed: cqi " .. tostring(data.cqi) })
     return
   end
   local result = run_handler(fn, data)
@@ -275,8 +280,16 @@ local function find_region(key)
   return r
 end
 
+-- A killed character stays in its faction's character_list for the rest of the session, and
+-- reading anything beyond cqi() from it crashes Rome II. The same goes for a dismantled slot's
+-- building. Both are remembered here and never touched again; reset when a campaign loads.
+local function forget_removed() M.removed = { characters = {}, slots = {} } end
+local function is_removed_character(cqi) return M.removed.characters[tostring(cqi)] == true end
+local function slot_id(region_key, index) return region_key .. "#" .. tostring(index) end
+
 local function find_character(cqi)
   local wanted = tostring(cqi)
+  if is_removed_character(wanted) then error("character was killed: cqi " .. wanted) end
   local factions = world():faction_list()
   for i = 0, factions:num_items() - 1 do
     local chars = factions:item_at(i):character_list()
@@ -444,9 +457,12 @@ M.handlers.get_active_characters = function(data)
     local fkey = f:name()
     local chars = f:character_list()
     for j = 0, chars:num_items() - 1 do
-      local entry = describe_character(chars:item_at(j), fkey)
-      if include_all or entry.has_force or entry.is_agent then
-        table.insert(out_list, entry)
+      local c = chars:item_at(j)
+      if not is_removed_character(c:cqi()) then
+        local entry = describe_character(c, fkey)
+        if include_all or entry.has_force or entry.is_agent then
+          table.insert(out_list, entry)
+        end
       end
     end
   end
@@ -569,7 +585,7 @@ M.handlers.get_settlement_slots = function(data)
   for i = 0, list:num_items() - 1 do
     local slot = list:item_at(i)
     local entry = { index = i, type = safe(function() return slot:type() end), name = safe(function() return slot:name() end) }
-    if safe(function() return slot:has_building() end, false) then
+    if not M.removed.slots[slot_id(key, i)] and safe(function() return slot:has_building() end, false) then
       local b = slot:building()
       entry.building = safe(function() return b:name() end)
       entry.chain = safe(function() return b:chain() end)
@@ -588,7 +604,9 @@ end
 
 local function require_building(region_key, index)
   local slot = slot_at(region_key, index)
-  if not safe(function() return slot:has_building() end, false) then error("slot " .. index .. " has no building") end
+  if M.removed.slots[slot_id(region_key, index)] or not safe(function() return slot:has_building() end, false) then
+    error("slot " .. index .. " has no building")
+  end
   return slot, slot:building():name()
 end
 
@@ -603,14 +621,15 @@ M.handlers.repair_building = function(data)
 end
 
 -- instantly_dismantle_building has no CA or DEI call site. In game (region_key, building_key) raised
--- an argument error and the slot object removed the building. The slot must not be read again
--- until the hold expires.
+-- an argument error and the slot object removed the building. The slot is reported empty from now
+-- on without reading it (M.removed), so a building constructed there later this session is not shown.
 M.handlers.dismantle_building = function(data)
   local region = require_arg(data, "region", "string")
   local index = require_arg(data, "slot", "number")
   local slot, building = require_building(region, index)
   log("dismantle_building " .. region .. " slot " .. index .. " " .. building)
   gi():instantly_dismantle_building(slot)
+  M.removed.slots[slot_id(region, index)] = true
   hold_model_reads()
   return ok({ region = region, slot = index, building = building })
 end
@@ -692,6 +711,7 @@ M.handlers.kill_character = function(data)
   if is_leader and not data.allow_leader then error("refusing to kill a faction leader (crashes the game)") end
   log("kill_character cqi " .. cqi .. " destroy_force=" .. tostring(destroy_force))
   gi():kill_character(char_str(cqi), destroy_force)
+  M.removed.characters[tostring(cqi)] = true
   hold_model_reads()
   return ok({ cqi = cqi })
 end
@@ -911,7 +931,7 @@ local function general_near(faction_key, x, y, exclude_cqi)
   for i = 0, chars:num_items() - 1 do
     local c = chars:item_at(i)
     local cqi = c:cqi()
-    if cqi ~= exclude_cqi and safe(function() return c:has_military_force() end, false) then
+    if cqi ~= exclude_cqi and not is_removed_character(cqi) and safe(function() return c:has_military_force() end, false) then
       local d = (c:logical_position_x() - x) ^ 2 + (c:logical_position_y() - y) ^ 2
       if d < best_d then best, best_d = cqi, d end
     end
@@ -992,7 +1012,7 @@ local function run_kill(id)
   local ok_find = pcall(find_character, p.cqi)
   if not ok_find then p.status = "done"; log("relocate " .. id .. ": original already gone"); M.finish(id); return end
   local ok_kill, err = pcall(function() gi():kill_character(char_str(p.cqi), true) end)
-  if ok_kill then hold_model_reads() end
+  if ok_kill then M.removed.characters[tostring(p.cqi)] = true; hold_model_reads() end
   p.status = ok_kill and "done" or "kill_failed"
   log("relocate " .. id .. ": kill original cqi " .. tostring(p.cqi) .. (ok_kill and " ok" or (" failed: " .. tostring(err))))
   M.finish(id)
@@ -1101,6 +1121,7 @@ function M.start(game_interface, reason)
   log("start(" .. tostring(reason) .. "): folder=" .. tostring(M.folder) .. " kind=" .. tostring(M.folder_kind) .. " writable=" .. tostring(writable))
   M.active = true
   M.request_id = -1
+  forget_removed()
   local ok_marker, err = pcall(write_ready_marker)
   if not ok_marker then log("ready marker failed: " .. tostring(err)) else log("ready marker written") end
   schedule_poll()
