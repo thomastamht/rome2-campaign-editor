@@ -1,0 +1,18 @@
+{
+  "name": "rome2-campaign-editor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build --base=./",
+    "build:pack": "node tools/build-pack.mjs",
+    "build:all": "npm run build && npm run build:pack",
+    "read-pack": "node tools/read-pack.mjs",
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "fengari": "^0.1.5",
+    "vite": "^6.4.1"
+  }
+}

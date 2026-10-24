@@ -1,0 +1,85 @@
+[h1]Web Campaign Editor for ROME II (experimental)[/h1]
+Edit a running campaign from your browser. A port of IMRZ's [url=https://steamcommunity.com/sharedfiles/filedetails/?id=2295560801]Web campaign editor[/url] for WARHAMMER II to Total War: ROME II. Works with vanilla and with total conversions such as Divide et Impera — everything (factions, regions, characters) is read live from the game, nothing is hard-coded.
+
+Web app: [b]WEB_APP_URL[/b]  (replace after deploying dist/ to GitHub Pages or run it locally with npm run dev)
+
+[h2]Features[/h2]
+[list]
+[*] Live map of every army, navy, agent and settlement on the game's own HD terrain map, with faction flags, zoom and pan
+[*] Click a general: general experience (points), instant ranks (chevrons) for every soldier in the army, add any base-game unit (searchable picker with localised names), replenish or zero action points, kill
+[*] Click an agent (spy / dignitary / champion): agent experience (points), replenish or zero action points, kill
+[*] Click a settlement: transfer to another faction, public order, development points, repair, rebellion
+[*] Right-click the map to spawn a new army for any faction
+[*] Faction treasury: add / subtract / set an exact amount; effect bundles, tax rate, reveal the whole map
+[*] Diplomacy: force war, peace, trade agreement, vassalage; allow or block diplomatic options
+[*] Console tab: send any supported request by hand and read the raw reply
+[*] Settings: English / 简体中文 / 繁體中文 interface, auto-refresh
+[/list]
+
+[h2]Setup[/h2]
+[olist]
+[*] Press Win+R and run:  [code]powershell.exe mkdir $env:USERPROFILE\rome2_web_editor_mod[/code]  (creates C:\Users\YOUR_NAME\rome2_web_editor_mod)
+[*] Subscribe, enable the mod in the launcher and load (or start) a campaign. When the map is interactive, the game writes a "ready" marker into response.json in that folder.
+[*] Open the web app in [b]Chrome or Edge[/b] (it needs the File System Access API), click [b]Connect folder[/b] and select the folder from step 1.
+[*] Disable the mod when you are done. It does not alter save games by itself; only the edits you make do.
+[/olist]
+
+[h2]Compatibility[/h2]
+The mod ships one Lua hook inside lua_scripts/episodicscripting.lua, which every ROME II campaign (vanilla, DLC campaigns, Divide et Impera, Diplomacy Reforged ...) loads, and no db tables. It conflicts only with a mod that replaces that same Lua file. No DEI patch is needed. Load order does not matter unless such a conflict exists; in that case put this mod above the other one.
+
+[h2]Limitations — please read[/h2]
+[list]
+[*] ROME II's scripting has no campaign teleport, so armies cannot be dragged on the map. Move them in the game and use "Replenish action points" from the character panel when they run out of movement.
+[*] Killing your own faction leader can crash the game. "Kill character" is meant for AI characters; save first.
+[*] Some commands exist in the game's script API but their argument order was taken from Attila-era documentation and has not been confirmed on ROME II yet. They are not flagged in the interface; the list of still-unverified commands is kept in TESTING.md in the project repository.
+[*] Single-player only. Using it in a multiplayer campaign will desync.
+[*] Only Chromium browsers (Chrome, Edge) support the folder access the web app relies on.
+[/list]
+
+[h2]Credits[/h2]
+IMRZ for the original WARHAMMER II editor and its request/response design · rxi for json.lua (MIT) · Creative Assembly for ROME II.
+Source code, pack builder and tests: SOURCE_URL
+
+[hr][/hr]
+
+[h1]ROME II 网页战役编辑器（实验性）[/h1]
+在浏览器中实时编辑正在进行的战役。移植自 IMRZ 的战锤 II [url=https://steamcommunity.com/sharedfiles/filedetails/?id=2295560801]Web campaign editor[/url]。原版与 DEI（Divide et Impera）等大型 Mod 通用：势力、地区、角色全部从游戏实时读取，没有任何写死的数据。
+
+网页端：[b]WEB_APP_URL[/b]
+
+[h2]功能[/h2]
+[list]
+[*] 在游戏自带的高清地形图上实时显示所有军队、舰队、特工与城市，带势力旗帜，可缩放平移
+[*] 点将领：将军经验（点数）、全军士兵立即提升军衔、向军队添加任意本体兵种（可搜索、显示中文名）、补满 / 清空行动力、杀死角色
+[*] 点特工（间谍 / 政要 / 勇士）：特工经验（点数）、补满 / 清空行动力、杀死角色
+[*] 点城市：转移归属、设置治安、增加发展点数、修复建筑、触发叛乱
+[*] 右键地图为任意势力创建新军队
+[*] 修改势力金库：增减或直接设为指定数值；效果包、税率、揭示整张地图
+[*] 外交：强制宣战、和平、贸易协定、附庸；允许或禁止外交选项
+[*] 控制台：手动发送任意受支持的请求并查看原始回复
+[*] 设定：English / 简体中文 / 繁體中文 界面、自动刷新
+[/list]
+
+[h2]安装步骤[/h2]
+[olist]
+[*] 按 Win+R，运行：[code]powershell.exe mkdir $env:USERPROFILE\rome2_web_editor_mod[/code]（会创建 C:\Users\你的用户名\rome2_web_editor_mod）
+[*] 订阅并在启动器中勾选本 Mod，载入或开始一局战役。地图可以操作后，游戏会把 "ready" 标记写进该文件夹的 response.json。
+[*] 用 [b]Chrome 或 Edge[/b] 打开网页端（需要 File System Access API），点击「连接文件夹」，选择第 1 步的文件夹。
+[*] 用完后取消勾选即可。Mod 本身不会改动存档，只有你做的编辑会生效。
+[/olist]
+
+[h2]兼容性[/h2]
+本 Mod 只在 lua_scripts/episodicscripting.lua 中加了一个挂钩（ROME II 所有战役脚本——原版、DLC 战役、DEI、Diplomacy Reforged 等——都会加载这个文件），不含任何 db 表，因此不需要 DEI 补丁。只有同样替换了那个 Lua 文件的 Mod 才会冲突；若有冲突，把本 Mod 放在它上面。
+
+[h2]限制——请务必阅读[/h2]
+[list]
+[*] ROME II 的脚本接口没有战役传送功能，所以地图上的军队不能拖动。请在游戏里行军，行动力不够时在角色面板点「补满行动力」。
+[*] 杀死自己的派系领袖可能导致游戏崩溃。「杀死角色」请只对 AI 角色使用，并先存档。
+[*] 部分命令存在于游戏脚本接口，但参数顺序来自阿提拉时期的文档，尚未在 ROME II 上确认。界面里不再单独标出，尚未验证的命令清单见项目仓库中的 TESTING.md。
+[*] 仅限单人战役，多人战役使用会不同步。
+[*] 只有 Chromium 内核浏览器（Chrome、Edge）支持网页端所需的文件夹访问。
+[/list]
+
+[h2]致谢[/h2]
+IMRZ（原版战锤 II 编辑器及其请求/响应设计）· rxi（json.lua，MIT）· Creative Assembly（ROME II）。
+源码、pack 构建工具与测试：SOURCE_URL
