@@ -8,7 +8,7 @@ Web app: [b][url=https://thomastamht.github.io/rome2-campaign-editor/]https://th
 [*] Live map of every army, navy, agent and settlement on the game's own HD terrain map, with faction flags, zoom and pan
 [*] Click a general: general experience, instant ranks (chevrons) for every soldier in the army, replenish or zero action points
 [*] Click an agent (spy / dignitary / champion): agent experience, replenish or zero action points
-[*] Click a settlement: transfer to another faction, public order, development points, repair, rebellion
+[*] Click a settlement: transfer to another faction, public order, population surplus, repair, rebellion
 [*] Right-click the map to spawn a new army for any faction
 [*] Faction treasury: set an exact amount
 [*] Diplomacy: force war, peace, trade agreement, vassalage
@@ -51,7 +51,7 @@ Source code, pack builder and tests: [url=https://github.com/thomastamht/rome2-c
 [*] 在游戏自带的高清地形图上实时显示所有军队、舰队、特工与城市，带势力旗帜，可缩放平移
 [*] 点将领：将军经验、全军士兵立即提升军衔、补满 / 清空行动力
 [*] 点特工（间谍 / 政要 / 勇士）：特工经验、补满 / 清空行动力
-[*] 点城市：转移归属、设置治安、增加发展点数、修复建筑、触发叛乱
+[*] 点城市：转移归属、设置治安、增加人口盈余、修复建筑、触发叛乱
 [*] 右键地图为任意势力创建新军队
 [*] 修改势力国库：直接设为指定数值
 [*] 外交：强制宣战、和平、贸易协定、附庸

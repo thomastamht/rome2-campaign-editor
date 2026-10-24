@@ -665,12 +665,12 @@ function bindActions(scope) {
     const r = b.dataset.region ? state.regions.find(x => x.key === b.dataset.region) : null;
     const open = {
       transfer: () => r && transferDialog(r),
-      publicOrder: () => r && numberDialog(r.name, "set_public_order", t("publicOrder"), r.public_order ?? 0, v => ({ region: r.key, value: Math.max(-10, Math.min(10, v)) })),
+      publicOrder: () => r && publicOrderDialog(r),
       // The character's own experience (general or agent). award_experience_level would rank up the
       // army's units instead, which is the separate unitExperience action.
       experience: () => c && characterExperienceDialog(c),
       unitExperience: () => c && unitExperienceDialog(c),
-      develop: () => r && numberDialog(r.name, "add_development_points_to_region", t("points"), 1, v => ({ region: r.key, points: v })),
+      develop: () => r && populationSurplusDialog(r),
     }[b.dataset.dialog];
     open?.();
   });
@@ -809,10 +809,25 @@ function transferDialog(r) {
   });
 }
 
-function numberDialog(subject, type, label, initial, toArgs) {
-  openDialog(`${label} · ${esc(subject)}`, `<label>${label}<input id="num" type="number" value="${initial}" autofocus></label>`, dlg => {
-    const v = Number(dlg.querySelector("#num").value);
-    if (Number.isFinite(v)) run(type, toArgs(v));
+function publicOrderDialog(r) {
+  const body = `
+    <p class="muted">${esc(r.name)}</p>
+    <label>${t("publicOrder")}<input type="number" id="order" value="${Number.isFinite(r.public_order) ? r.public_order : 0}" autofocus></label>
+    <p class="muted">${t("publicOrderHint")}</p>`;
+  openDialog(t("publicOrder"), body, dlg => {
+    const value = Number(dlg.querySelector("#order").value);
+    if (Number.isFinite(value)) run("set_public_order", { region: r.key, value }, { label: t("publicOrder") });
+  });
+}
+
+function populationSurplusDialog(r) {
+  const body = `
+    <p class="muted">${esc(r.name)}</p>
+    <label>${t("populationSurplus")}<input type="number" id="surplus" value="1" autofocus></label>
+    <p class="muted">${t("populationSurplusHint")}</p>`;
+  openDialog(t("develop"), body, dlg => {
+    const points = Number(dlg.querySelector("#surplus").value);
+    if (Number.isFinite(points)) run("add_development_points_to_region", { region: r.key, points }, { label: t("develop") });
   });
 }
 
