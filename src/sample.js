@@ -57,7 +57,7 @@ export const demoInfo = {
     force_rebellion_in_region: "verified", force_make_vassal: "engine", force_add_trait: "engine",
     force_add_ancillary: "engine", add_development_points_to_region: "engine", set_tax_rate: "engine",
     hide_character: "engine", unhide_character: "engine", award_experience_level: "engine", add_agent_experience: "verified", add_force_experience: "engine",
-    instantly_repair_building: "engine", get_settlement_slots: "verified", repair_building: "verified", dismantle_building: "verified",
+    instantly_repair_building: "engine", get_settlement_slots: "verified", repair_building: "verified",
     end_turn: "engine", relocate_force: "composed", relocate_status: "verified", move_force: "engine", move_status: "verified",
   },
 };
@@ -140,15 +140,7 @@ export class DemoBridge {
     const s = this.slot(region, slot);
     if (!s.building) throw new Error(`slot ${slot} has no building`);
     return { ok: true, region, slot, building: s.building, percent: 100 };
-  }
-  h_dismantle_building({ region, slot }) {
-    const s = this.slot(region, slot);
-    if (!s.building) throw new Error(`slot ${slot} has no building`);
-    const building = s.building;
-    delete s.building; delete s.chain; delete s.superchain;
-    return { ok: true, region, slot, building };
-  }
-  h_force_rebellion_in_region({ region }) { this.region(region); return { ok: true, region }; }
+  }  h_force_rebellion_in_region({ region }) { this.region(region); return { ok: true, region }; }
   h_set_tax_rate({ faction, rate }) { this.faction(faction); return { ok: true, faction, rate }; }
   h_force_add_ancillary({ cqi, ancillary }) { this.character(cqi); return { ok: true, cqi, ancillary }; }
   h_apply_effect_bundle({ bundle, faction }) { this.faction(faction); return { ok: true, bundle, faction }; }

@@ -112,7 +112,6 @@ local function make_region(key, owner, x, y)
     local items = {}
     for _, s in ipairs(r.slots) do
       table.insert(items, {
-        state = s,
         has_building = function() return s.building ~= nil end,
         building = function() return { name = function() return s.building end, chain = function() return s.chain end, superchain = function() return s.superchain end } end,
       })
@@ -198,13 +197,7 @@ GI = {
   award_experience_level = record("award_experience_level"),
   add_agent_experience = record("add_agent_experience"),
   apply_effect_bundle_to_characters_force = record("apply_effect_bundle_to_characters_force"),
-  instant_set_building_health_percent = record("instant_set_building_health_percent"),
-  instantly_dismantle_building = record("instantly_dismantle_building", function(slot)
-    if type(slot) ~= "table" or not slot.state then error("bad argument #1 (slot expected)") end
-    local s = slot.state
-    s.building, s.chain, s.superchain = nil, nil, nil
-  end),
-  -- Mock accepts the (region_key, building_key) form only.
+  instant_set_building_health_percent = record("instant_set_building_health_percent"),  -- Mock accepts the (region_key, building_key) form only.
   -- move_to deliberately absent: Rome II's GAME table does not list it.
 }
 

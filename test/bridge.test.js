@@ -342,21 +342,10 @@ test("per-slot repair sets health to 100 with the verified 3-argument call", () 
   vm.request({ type: "repair_building", request_id: 71, region: "rom_italia_latium", slot: 1 });
   assert.match(vm.response().result.error, /slot 1 has no building/);
 });
-
-test("dismantle_building passes the slot and does not read it again", () => {
-  const vm = newVm();
-  vm.run(`FIRE("FirstTickAfterWorldCreated", {})`);
-  vm.request({ type: "dismantle_building", request_id: 72, region: "rom_italia_latium", slot: 0 });
-  assert.equal(vm.response().result.building, "rom_ROMAN_city_major_1");
-  assert.deepEqual(vm.evalJson(`{ name = CALLS[#CALLS].name, same = CALLS[#CALLS].args[1].state == REGIONS.rom_italia_latium.slots[1], gone = REGIONS.rom_italia_latium.slots[1].building == nil }`), { name: "instantly_dismantle_building", same: true, gone: true });
-  vm.request({ type: "dismantle_building", request_id: 73, region: "rom_italia_latium", slot: 1 });
-  assert.match(vm.response().result.error, /slot 1 has no building/);
-});
-
 test("removed handlers are gone: construction, UI probes, kill, dismantle and garrison edits", () => {
   const vm = newVm();
   const gone = ["construction_options", "construct_building", "construction_status", "set_building_health", "ui_tree", "ui_find", "ui_click", "ui_key", "ui_panels",
-    "kill_character", "instantly_dismantle_building", "grant_unit", "join_garrison", "leave_garrison"];
+    "kill_character", "dismantle_building", "instantly_dismantle_building", "grant_unit", "join_garrison", "leave_garrison"];
   const left = vm.evalJson(`(function() local t = {} for _, k in ipairs(${JSON.stringify(gone).replace("[", "{").replace("]", "}")}) do if M.handlers[k] or M.capabilities[k] then table.insert(t, k) end end return { left = t } end)()`);
   assert.deepEqual(left.left ?? [], []);
 });

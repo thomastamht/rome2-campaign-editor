@@ -53,7 +53,7 @@ M.capabilities = {
   set_tax_rate = "engine", hide_character = "engine", unhide_character = "engine", award_experience_level = "engine",
   add_agent_experience = "verified", add_force_experience = "engine",
   instantly_repair_building = "engine", end_turn = "engine",
-  get_settlement_slots = "verified", repair_building = "verified", dismantle_building = "verified",
+  get_settlement_slots = "verified", repair_building = "verified",
   relocate_force = "composed", relocate_status = "verified",
   move_force = "engine", move_status = "verified",
 }
@@ -647,17 +647,6 @@ M.handlers.repair_building = function(data)
   gi():instant_set_building_health_percent(region, building, 100)
   return ok({ region = region, slot = index, building = building, percent = 100 })
 end
-
--- In game, (region_key, building_key) raised an argument error and the slot object removed the
--- building. Do not read the slot again here: a follow-up read while the game tears it down crashed.
-M.handlers.dismantle_building = function(data)
-  local region = require_arg(data, "region", "string")
-  local index = require_arg(data, "slot", "number")
-  local slot, building = require_building(region, index)
-  gi():instantly_dismantle_building(slot)
-  return ok({ region = region, slot = index, building = building })
-end
-
 -------------------------------------------------------------------------------
 -- diplomacy
 -------------------------------------------------------------------------------

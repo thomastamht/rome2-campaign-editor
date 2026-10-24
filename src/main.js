@@ -338,7 +338,7 @@ async function loadAllNow() {
   busy(1);
   try {
     const { info, factions, regions, characters } = await fetchSnapshot();
-    if (Date.now() >= slotReadsAt) slotCache.clear();
+    slotCache.clear();
     state.info = info;
     state.factions = Array.isArray(factions) ? factions : [];
     state.characters = Array.isArray(characters) ? characters : [];
@@ -491,11 +491,7 @@ function regionDrawer(r) {
 }
 
 // Settlement slots are fetched when a settlement is opened and dropped on every refresh.
-// After a dismantle the game is still tearing the building down; reading the slot again in
-// that window crashed Rome II, so slot reads wait.
 const slotCache = new Map();   // region key -> slots[] | "loading" | Error message
-const SLOT_READ_HOLD_MS = 5000;
-let slotReadsAt = 0;
 function slotsHtml(r) {
   const slots = slotCache.get(r.key);
   if (slots === undefined) { loadSlots(r.key); return `<small>…</small>`; }
@@ -507,51 +503,26 @@ function slotsHtml(r) {
   return slots.map(s => `<div class="slot-row"><span class="slot-index">${s.index + 1}</span>${s.building
     ? `<span title="${esc(s.building)}">${esc(buildingName(s.building, owner))}</span>`
     : `<span class="muted">${t("emptySlot")}</span>`}<span class="slot-actions">${
-    button(s, "repair", "⚒", t("repairBuilding"), s.building && can("repair_building"))
-    }${button(s, "dismantle", "✕", t("dismantleBuilding"), s.building && can("dismantle_building"))}</span></div>`).join("");
+    button(s, "repair", "⚒", t("repairBuilding"), s.building && can("repair_building"))}</span></div>`).join("");
 }
 
 const buildingName = (key, owner) => buildingDisplayName(key, owner?.culture, owner?.subculture) ?? key;
 
-async function slotCommand(r, index, type, label) {
+async function repairSlot(r, index) {
+  const type = "repair_building";
   const args = { region: r.key, slot: index };
   busy(1);
   try {
     const res = assertOk(await state.bridge.request(type, args), type);
     pushLog(type, args, res);
-    toast(`${label}: OK`);
-    return true;
+    toast(`${t("repairBuilding")}: OK`);
   } catch (e) {
     pushLog(type, args, null, e.message);
     toast(e.message);
-    return false;
   } finally { busy(-1); }
 }
 
-function paintSlots(r) {
-  const el = document.querySelector("#slotList");
-  if (el && state.selected?.kind === "region" && state.selected.item.key === r.key) {
-    el.innerHTML = slotsHtml(r);
-    bindActions(el);
-  }
-}
-
-async function repairSlot(r, index) {
-  await slotCommand(r, index, "repair_building", t("repairBuilding"));
-}
-
-async function dismantleSlot(r, index) {
-  const ok = await slotCommand(r, index, "dismantle_building", t("dismantleBuilding"));
-  if (!ok) return;
-  const slots = slotCache.get(r.key);
-  const slot = Array.isArray(slots) ? slots.find(s => s.index === index) : null;
-  if (slot) { delete slot.building; delete slot.chain; delete slot.superchain; }
-  slotReadsAt = Date.now() + SLOT_READ_HOLD_MS;
-  paintSlots(r);
-}
-
 async function loadSlots(regionKey) {
-  if (Date.now() < slotReadsAt) return;
   slotCache.set(regionKey, "loading");
   try {
     const res = assertOk(await state.bridge.request("get_settlement_slots", { region: regionKey }), "get_settlement_slots");
@@ -693,10 +664,7 @@ function bindActions(scope) {
   });
   scope.querySelectorAll("[data-slot]").forEach(b => b.onclick = () => {
     const r = state.selected?.kind === "region" ? state.selected.item : null;
-    if (!r) return;
-    const index = Number(b.dataset.index);
-    if (b.dataset.slot === "dismantle") dismantleSlot(r, index);
-    else repairSlot(r, index);
+    if (r) repairSlot(r, Number(b.dataset.index));
   });
   scope.querySelectorAll("[data-dialog]").forEach(b => b.onclick = () => {
     const c = b.dataset.cqi ? state.characters.find(x => x.cqi === Number(b.dataset.cqi)) : null;
