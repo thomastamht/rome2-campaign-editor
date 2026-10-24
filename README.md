@@ -35,11 +35,11 @@ Chrome / Edge  ◄────────────────────�
    (+ `rome2_web_editor.png`). Copy both into `<Rome II>\data\` and enable the mod in the launcher,
    or subscribe on the Workshop.
 3. Load a campaign. Check that `%USERPROFILE%\rome2_web_editor_mod\response.json` now contains `"status":"ready"`.
-4. Double-click `Open Editor.bat` (or the desktop shortcut). It serves the built page at
-   http://127.0.0.1:5173 and opens Chrome/Edge. The page is the same idea as the WH2 editor at
-   https://imrz.github.io/tww2-campaign-editor/ : it opens whether or not the game is running.
+4. Open https://thomastamht.github.io/rome2-campaign-editor/ in Chrome/Edge. Like the WH2 editor at
+   https://imrz.github.io/tww2-campaign-editor/, the page opens whether or not the game is running.
    Click **Connect folder** and pick the folder from step 1. The browser remembers that folder, so
    the next time the page opens it reconnects by itself while the permission lasts.
+   To publish a new version: `npm run build`, then push `dist/` to the `gh-pages` branch.
 
 Without a connected folder the app shows only the empty campaign map; factions, armies and settlements
 appear once the bridge folder is connected and the game has written its ready marker.
