@@ -145,14 +145,13 @@ function mountMap() {
 
 const isLandArmy = (c) => Boolean(c.has_force && !c.is_navy && !c.is_agent);
 
-// Forces inside a settlement (the garrison, including a docked navy) are not drawn and have no panel.
+// An army or navy that has entered a city is still that force. The settlement's own garrison is not a character.
 function visibleCharacters() {
   return state.characters.filter(c =>
     (state.factionFilter === "all" || c.faction === state.factionFilter) &&
     (state.showArmies || !isLandArmy(c)) &&
     (state.showNavies || !c.is_navy) &&
-    (state.showAgents || !c.is_agent) &&
-    !c.in_settlement);
+    (state.showAgents || !c.is_agent));
 }
 
 function feedMap() {
@@ -284,6 +283,7 @@ async function useDirectory(dir, { quiet = false } = {}) {
   if (!quiet || !ready) toast(ready ? t("connected") : t("notReady"));
   updateHeader();
   await loadAll();
+  followCampaign();
 }
 
 async function connect() {
@@ -334,7 +334,8 @@ async function loadAllNow() {
   busy(1);
   try {
     const { info, factions, regions, characters } = await fetchSnapshot();
-    slotCache.clear();    state.info = info;
+    if (Date.now() >= slotReadsAt) slotCache.clear();
+    state.info = info;
     state.factions = Array.isArray(factions) ? factions : [];
     state.characters = Array.isArray(characters) ? characters : [];
     state.coords = coordinateModel([...state.characters, ...(Array.isArray(regions) ? regions : [])]);
@@ -345,7 +346,7 @@ async function loadAllNow() {
     localiseData();
     if (state.selected?.kind === "character") {
       const fresh = state.characters.find(c => c.cqi === state.selected.item.cqi);
-      state.selected = fresh && !fresh.in_settlement ? { kind: "character", item: fresh } : null;
+      state.selected = fresh ? { kind: "character", item: fresh } : null;
     } else if (state.selected?.kind === "region") {
       const fresh = state.regions.find(r => r.key === state.selected.item.key);
       state.selected = fresh ? { kind: "region", item: fresh } : null;
@@ -413,7 +414,9 @@ function dialogAction(icon, label, dialog, type, extra = "") {
   return `<button class="action" data-dialog="${dialog}" ${extra} ${can(type) ? "" : "disabled"}><i>${icon}</i><span>${label}</span></button>`;
 }
 
-function field(label, value) { return `<div class="field"><small>${label}</small><div>${value}</div></div>`; }
+function field(label, value, id = "") {
+  return `<div class="field"${id ? ` id="${id}"` : ""}><small>${label}</small><div>${value}</div></div>`;
+}
 
 function flagImg(key, size = 28) {
   const info = flagInfo(key);
@@ -449,9 +452,9 @@ function characterDrawer(c) {
       ${field(t("name"), esc(charName(c)))}
       ${field(t("faction"), esc(factionName(c.faction)))}
       ${field(t("typeSubtype"), `${esc(typeLabel(c))}${c.faction_leader ? ` · ${t("leader")}` : ""}${c.has_force ? ` · ${c.is_navy ? t("navy") : t("army")} · ${c.units ?? "?"} ${t("units")}` : ""}`)}
-      ${field(t("logicalPos"), `${c.lx}, ${c.ly}`)}
+      ${field(t("logicalPos"), `${c.lx}, ${c.ly}`, "charPos")}
       ${field("CQI", c.cqi)}
-      ${field(t("region"), esc(regionName(c.region)))}
+      ${field(t("region"), esc(regionName(c.region)), "charRegion")}
       <h4>${t("actions")}</h4>
       <div class="action-list">
         ${dialogAction("▲", t(c.is_agent ? "agentExperience" : "generalExperience"), "experience", "add_agent_experience", `data-cqi="${c.cqi}"`)}
@@ -477,7 +480,6 @@ function regionDrawer(r) {
         ${dialogAction("⇄", t("transfer"), "transfer", "transfer_region_to_faction", `data-region="${esc(r.key)}"`)}
         ${dialogAction("☺", t("publicOrder"), "publicOrder", "set_public_order", `data-region="${esc(r.key)}"`)}
         ${dialogAction("▲", t("develop"), "develop", "add_development_points_to_region", `data-region="${esc(r.key)}"`)}
-        ${action("⚒", t("repair"), "instantly_repair_building", `data-args='${esc(JSON.stringify({ region: r.key }))}' data-norefresh="1"`)}
         ${Number.isFinite(r.lx) ? action("⚑", t("rebellion"), "force_rebellion_in_region", `data-args='${esc(JSON.stringify({ region: r.key, units: 4, x: r.lx, y: r.ly }))}'`) : ""}
       </div>
     </div>`;
@@ -485,7 +487,11 @@ function regionDrawer(r) {
 }
 
 // Settlement slots are fetched when a settlement is opened and dropped on every refresh.
+// After a dismantle the game is still tearing the building down; reading the slot again in
+// that window crashed Rome II, so slot reads wait.
 const slotCache = new Map();   // region key -> slots[] | "loading" | Error message
+const SLOT_READ_HOLD_MS = 5000;
+let slotReadsAt = 0;
 function slotsHtml(r) {
   const slots = slotCache.get(r.key);
   if (slots === undefined) { loadSlots(r.key); return `<small>…</small>`; }
@@ -497,26 +503,51 @@ function slotsHtml(r) {
   return slots.map(s => `<div class="slot-row"><span class="slot-index">${s.index + 1}</span>${s.building
     ? `<span title="${esc(s.building)}">${esc(buildingName(s.building, owner))}</span>`
     : `<span class="muted">${t("emptySlot")}</span>`}<span class="slot-actions">${
-    button(s, "repair", "⚒", t("repairBuilding"), s.building && can("repair_building"))}</span></div>`).join("");
+    button(s, "repair", "⚒", t("repairBuilding"), s.building && can("repair_building"))
+    }${button(s, "dismantle", "✕", t("dismantleBuilding"), s.building && can("dismantle_building"))}</span></div>`).join("");
 }
 
 const buildingName = (key, owner) => buildingDisplayName(key, owner?.culture, owner?.subculture) ?? key;
 
-async function repairSlot(r, index) {
-  const type = "repair_building";
+async function slotCommand(r, index, type, label) {
   const args = { region: r.key, slot: index };
   busy(1);
   try {
     const res = assertOk(await state.bridge.request(type, args), type);
     pushLog(type, args, res);
-    toast(`${t("repairBuilding")}: OK`);
+    toast(`${label}: OK`);
+    return true;
   } catch (e) {
     pushLog(type, args, null, e.message);
     toast(e.message);
+    return false;
   } finally { busy(-1); }
 }
 
+function paintSlots(r) {
+  const el = document.querySelector("#slotList");
+  if (el && state.selected?.kind === "region" && state.selected.item.key === r.key) {
+    el.innerHTML = slotsHtml(r);
+    bindActions(el);
+  }
+}
+
+async function repairSlot(r, index) {
+  await slotCommand(r, index, "repair_building", t("repairBuilding"));
+}
+
+async function dismantleSlot(r, index) {
+  const ok = await slotCommand(r, index, "dismantle_building", t("dismantleBuilding"));
+  if (!ok) return;
+  const slots = slotCache.get(r.key);
+  const slot = Array.isArray(slots) ? slots.find(s => s.index === index) : null;
+  if (slot) { delete slot.building; delete slot.chain; delete slot.superchain; }
+  slotReadsAt = Date.now() + SLOT_READ_HOLD_MS;
+  paintSlots(r);
+}
+
 async function loadSlots(regionKey) {
+  if (Date.now() < slotReadsAt) return;
   slotCache.set(regionKey, "loading");
   try {
     const res = assertOk(await state.bridge.request("get_settlement_slots", { region: regionKey }), "get_settlement_slots");
@@ -658,7 +689,10 @@ function bindActions(scope) {
   });
   scope.querySelectorAll("[data-slot]").forEach(b => b.onclick = () => {
     const r = state.selected?.kind === "region" ? state.selected.item : null;
-    if (r) repairSlot(r, Number(b.dataset.index));
+    if (!r) return;
+    const index = Number(b.dataset.index);
+    if (b.dataset.slot === "dismantle") dismantleSlot(r, index);
+    else repairSlot(r, index);
   });
   scope.querySelectorAll("[data-dialog]").forEach(b => b.onclick = () => {
     const c = b.dataset.cqi ? state.characters.find(x => x.cqi === Number(b.dataset.cqi)) : null;
@@ -691,21 +725,86 @@ function openDialog(title, body, onConfirm) {
   return dlg;
 }
 
+/**
+ * Follows armies while they walk. The bridge answers one request at a time, so this waits
+ * out a click (state.busy) and leaves a gap between polls instead of queueing forever.
+ */
+const WATCH_MS = 250;
+let watchOn = false;
+let watchFailures = 0;
+
+function followCampaign() {
+  if (watchOn || state.mode !== "live" || !state.bridge) return;
+  watchOn = true;
+  watchFailures = 0;
+  stepWatch();
+}
+
+function stepWatch() {
+  if (!watchOn || state.mode !== "live" || !state.bridge) { watchOn = false; return; }
+  const run = state.busy > 0 ? Promise.resolve(true) : refreshCharacters({ quiet: true });
+  run.finally(() => {
+    if (!watchOn) return;
+    const gap = watchFailures ? Math.min(8000, WATCH_MS * 2 ** watchFailures) : WATCH_MS;
+    setTimeout(stepWatch, gap);
+  });
+}
+
+/** Positions while walking. A full record (no positions_only support) replaces the list. */
+function applyCharacterWatch(incoming) {
+  const light = incoming.length > 0 && incoming[0].faction === undefined && incoming[0].has_force === undefined;
+  if (!light) {
+    state.characters = incoming;
+    return;
+  }
+  const known = new Set(state.characters.map(c => c.cqi));
+  if (incoming.some(c => !known.has(c.cqi))) return false;
+  const byCqi = new Map(incoming.map(c => [c.cqi, c]));
+  state.characters = state.characters
+    .filter(c => byCqi.has(c.cqi))
+    .map(c => ({ ...c, ...byCqi.get(c.cqi) }));
+  return true;
+}
+
+function syncLiveSelection(hadCharacter) {
+  if (hadCharacter && state.selected?.kind !== "character") {
+    renderDrawer();
+    return;
+  }
+  const c = state.selected?.kind === "character" ? state.selected.item : null;
+  if (!c) return;
+  const pos = document.querySelector("#charPos div");
+  if (pos) pos.textContent = `${c.lx}, ${c.ly}`;
+  const region = document.querySelector("#charRegion div");
+  if (region && c.region) region.textContent = regionName(c.region);
+}
+
 /** Cheaper than loadAll: only positions/forces change after a character action. */
-async function refreshCharacters() {
+async function refreshCharacters({ quiet = false } = {}) {
   try {
-    const characters = await state.bridge.request("get_active_characters");
-    if (!Array.isArray(characters)) return;
-    state.characters = characters;
+    let characters = await state.bridge.request("get_active_characters", quiet ? { positions_only: true } : {});
+    if (!Array.isArray(characters)) return false;
+    if (!quiet) state.characters = characters;
+    else if (applyCharacterWatch(characters) === false) {
+      characters = await state.bridge.request("get_active_characters");
+      if (!Array.isArray(characters)) return false;
+      state.characters = characters;
+    }
     localiseData();
-    if (state.selected?.kind === "character") {
+    const hadCharacter = state.selected?.kind === "character";
+    if (hadCharacter) {
       const fresh = state.characters.find(c => c.cqi === state.selected.item.cqi);
-      state.selected = fresh && !fresh.in_settlement ? { kind: "character", item: fresh } : null;
+      state.selected = fresh ? { kind: "character", item: fresh } : null;
     }
     feedMap();
-    renderDrawer();
+    if (quiet) syncLiveSelection(hadCharacter);
+    else renderDrawer();
+    watchFailures = 0;
+    return true;
   } catch (e) {
-    toast(e.message);
+    if (quiet) watchFailures += 1;
+    else toast(e.message);
+    return false;
   }
 }
 

@@ -53,7 +53,7 @@ M.capabilities = {
   set_tax_rate = "engine", hide_character = "engine", unhide_character = "engine", award_experience_level = "engine",
   add_agent_experience = "verified", add_force_experience = "engine",
   instantly_repair_building = "engine", end_turn = "engine",
-  get_settlement_slots = "verified", repair_building = "verified",
+  get_settlement_slots = "verified", repair_building = "verified", dismantle_building = "verified",
   relocate_force = "composed", relocate_status = "verified",
   move_force = "engine", move_status = "verified",
 }
@@ -169,6 +169,9 @@ end
 -- nothing reads the model while the game processes the death.
 M.hold_until = nil
 M.removed = { characters = {} }
+-- cqi -> true when the character is an agent. Filled while describing characters, so a
+-- later positions-only poll does not re-test every politician's type.
+M.agent_cqis = M.agent_cqis or {}
 local HOLD_SECONDS = 5
 local function hold_model_reads(seconds)
   M.hold_until = os.clock() + (seconds or HOLD_SECONDS)
@@ -440,11 +443,48 @@ local function describe_character(c, faction_key)
     entry.strength = safe(function() return force:percentage_proportion_of_full_strength() end)
     entry.is_general = safe(function() return force:has_general() and force:general_character():cqi() == c:cqi() end, false)
   end
+  if entry.cqi ~= nil then M.agent_cqis[entry.cqi] = entry.is_agent == true end
   return entry
+end
+
+-- A force is on the map; an agent is too. Anyone else (a politician) is not.
+local function character_on_map(c, cqi)
+  if safe(function() return c:has_military_force() end, false) then return true end
+  local known = M.agent_cqis[cqi]
+  if known ~= nil then return known end
+  local is_agent = AGENT_TYPES[character_type_of(c) or ""] == true
+  M.agent_cqis[cqi] = is_agent
+  return is_agent
+end
+
+-- Coordinates only. The browser already has names and forces and merges these in.
+local function character_positions()
+  local out_list = {}
+  local factions = world():faction_list()
+  for i = 0, factions:num_items() - 1 do
+    local f = factions:item_at(i)
+    local chars = f:character_list()
+    for j = 0, chars:num_items() - 1 do
+      local c = chars:item_at(j)
+      local cqi = safe(function() return c:cqi() end)
+      if cqi and not is_removed_character(cqi) and character_on_map(c, cqi) then
+        table.insert(out_list, {
+          cqi = cqi,
+          x = safe(function() return c:display_position_x() end),
+          y = safe(function() return c:display_position_y() end),
+          lx = safe(function() return c:logical_position_x() end),
+          ly = safe(function() return c:logical_position_y() end),
+          in_settlement = safe(function() return c:in_settlement() end, false),
+        })
+      end
+    end
+  end
+  return out_list
 end
 
 -- Characters that exist on the campaign map: generals with a force, and agents.
 M.handlers.get_active_characters = function(data)
+  if data and data.positions_only == true then return character_positions() end
   local include_all = data and data.include_all == true
   local out_list = {}
   local factions = world():faction_list()
@@ -606,6 +646,16 @@ M.handlers.repair_building = function(data)
   local _, building = require_building(region, index)
   gi():instant_set_building_health_percent(region, building, 100)
   return ok({ region = region, slot = index, building = building, percent = 100 })
+end
+
+-- In game, (region_key, building_key) raised an argument error and the slot object removed the
+-- building. Do not read the slot again here: a follow-up read while the game tears it down crashed.
+M.handlers.dismantle_building = function(data)
+  local region = require_arg(data, "region", "string")
+  local index = require_arg(data, "slot", "number")
+  local slot, building = require_building(region, index)
+  gi():instantly_dismantle_building(slot)
+  return ok({ region = region, slot = index, building = building })
 end
 
 -------------------------------------------------------------------------------
