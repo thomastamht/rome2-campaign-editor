@@ -145,9 +145,13 @@ function mountMap() {
 
 const isLandArmy = (c) => Boolean(c.has_force && !c.is_navy && !c.is_agent);
 
-// An army or navy that has entered a city is still that force. The settlement's own garrison is not a character.
+// Every settlement's own garrison is led by a "colonel" character; those are not drawn. A general's
+// army or fleet that has entered a city is still shown.
+const isGarrison = (c) => c.type === "colonel";
+
 function visibleCharacters() {
   return state.characters.filter(c =>
+    !isGarrison(c) &&
     (state.factionFilter === "all" || c.faction === state.factionFilter) &&
     (state.showArmies || !isLandArmy(c)) &&
     (state.showNavies || !c.is_navy) &&
@@ -346,7 +350,7 @@ async function loadAllNow() {
     localiseData();
     if (state.selected?.kind === "character") {
       const fresh = state.characters.find(c => c.cqi === state.selected.item.cqi);
-      state.selected = fresh ? { kind: "character", item: fresh } : null;
+      state.selected = fresh && !isGarrison(fresh) ? { kind: "character", item: fresh } : null;
     } else if (state.selected?.kind === "region") {
       const fresh = state.regions.find(r => r.key === state.selected.item.key);
       state.selected = fresh ? { kind: "region", item: fresh } : null;
@@ -794,7 +798,7 @@ async function refreshCharacters({ quiet = false } = {}) {
     const hadCharacter = state.selected?.kind === "character";
     if (hadCharacter) {
       const fresh = state.characters.find(c => c.cqi === state.selected.item.cqi);
-      state.selected = fresh ? { kind: "character", item: fresh } : null;
+      state.selected = fresh && !isGarrison(fresh) ? { kind: "character", item: fresh } : null;
     }
     feedMap();
     if (quiet) syncLiveSelection(hadCharacter);

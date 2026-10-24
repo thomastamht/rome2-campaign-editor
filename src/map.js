@@ -238,6 +238,7 @@ export class MapView {
     const z = Math.min(Math.max(this.view.zoom, 1), 3);
     if (kind === "region") return 16 * z;
     if (item.is_agent) return 7 * z;
+    if (item.in_settlement) return 10 * z;   // inside the 16 px settlement flag, which stays visible
     return 13 * z;
   }
 
@@ -250,7 +251,8 @@ export class MapView {
       const p = proj.toCanvas(at.x, at.y);
       const d = Math.hypot(p.px - px, p.py - py);
       const size = this.markerSize(kind, item);
-      const reach = size + 2;
+      // An army inside a city only takes clicks on its own flag; the city's ring still selects the city.
+      const reach = kind === "character" && item.in_settlement ? size / 2 + 1 : size + 2;
       if (d <= reach && d < bestDist) { bestDist = d; best = { kind, item }; }
     };
     for (const ch of this.data.characters) consider("character", ch);   // characters sit above settlements
