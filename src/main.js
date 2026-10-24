@@ -688,7 +688,7 @@ function bindActions(scope) {
       publicOrder: () => r && numberDialog(r.name, "set_public_order", t("publicOrder"), r.public_order ?? 0, v => ({ region: r.key, value: Math.max(-10, Math.min(10, v)) })),
       // The character's own experience (general or agent). award_experience_level would rank up the
       // army's units instead, which is the separate unitExperience action.
-      experience: () => c && numberDialog(charName(c), "add_agent_experience", t("points"), 100, v => ({ cqi: c.cqi, points: v })),
+      experience: () => c && characterExperienceDialog(c),
       unitExperience: () => c && unitExperienceDialog(c),
       develop: () => r && numberDialog(r.name, "add_development_points_to_region", t("points"), 1, v => ({ region: r.key, points: v })),
     }[b.dataset.dialog];
@@ -793,6 +793,18 @@ function createForceDialog(world, hit) {
   bindUnitPicker(dlg, (key) => {
     const area = dlg.querySelector("#units");
     area.value = [area.value.trim(), key].filter(Boolean).join(",");
+  });
+}
+
+function characterExperienceDialog(c) {
+  const title = t(c.is_agent ? "agentExperience" : "generalExperience");
+  const body = `
+    <p class="muted">${esc(charName(c))}</p>
+    <label>${t("points")}<input type="number" id="xpPoints" value="100" autofocus></label>
+    <p class="muted">${t(c.is_agent ? "agentXpHint" : "generalXpHint")}</p>`;
+  openDialog(title, body, dlg => {
+    const points = Number(dlg.querySelector("#xpPoints").value);
+    if (Number.isFinite(points)) run("add_agent_experience", { cqi: c.cqi, points }, { label: title });
   });
 }
 
