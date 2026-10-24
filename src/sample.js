@@ -55,10 +55,10 @@ export const demoInfo = {
     force_make_peace: "verified", force_make_trade_agreement: "verified", force_diplomacy: "verified", apply_effect_bundle: "verified",
     remove_effect_bundle: "verified", make_region_visible_in_shroud: "verified", show_shroud: "verified", scroll_camera: "verified",
     force_rebellion_in_region: "verified", force_make_vassal: "engine", force_add_trait: "engine",
-    force_add_ancillary: "engine", grant_unit: "engine", add_development_points_to_region: "engine", set_tax_rate: "engine",
+    force_add_ancillary: "engine", add_development_points_to_region: "engine", set_tax_rate: "engine",
     hide_character: "engine", unhide_character: "engine", award_experience_level: "engine", add_agent_experience: "verified", add_force_experience: "engine",
     instantly_repair_building: "engine", get_settlement_slots: "verified", repair_building: "verified",
-    end_turn: "engine", relocate_force: "composed", relocate_status: "verified", move_force: "engine", move_status: "verified", join_garrison: "engine", leave_garrison: "engine",
+    end_turn: "engine", relocate_force: "composed", relocate_status: "verified", move_force: "engine", move_status: "verified",
   },
 };
 
@@ -144,11 +144,6 @@ export class DemoBridge {
   h_force_rebellion_in_region({ region }) { this.region(region); return { ok: true, region }; }
   h_set_tax_rate({ faction, rate }) { this.faction(faction); return { ok: true, faction, rate }; }
   h_force_add_ancillary({ cqi, ancillary }) { this.character(cqi); return { ok: true, cqi, ancillary }; }
-  h_grant_unit({ cqi, region, unit }) {
-    if (cqi != null) throw new Error("Rome II cannot add units to an existing army by script; grant_unit only works on a settlement garrison ({region=key})");
-    this.region(region);
-    return { ok: true, target: `settlement:${region}`, unit };
-  }
   h_apply_effect_bundle({ bundle, faction }) { this.faction(faction); return { ok: true, bundle, faction }; }
   h_remove_effect_bundle({ bundle, faction }) { this.faction(faction); return { ok: true, bundle, faction }; }
   h_show_shroud({ visible }) { return { ok: true, visible }; }
@@ -172,8 +167,6 @@ export class DemoBridge {
     this.characters = this.characters.filter(x => x.cqi !== c.cqi);
     return { ok: true, faction: c.faction, region, units, killed_cqi: c.cqi };
   }
-  h_join_garrison({ cqi, region }) { const c = this.character(cqi); const r = this.region(region); c.lx = r.lx; c.ly = r.ly; c.x = r.x; c.y = r.y; c.region = region; c.in_settlement = true; return { ok: true, cqi, region }; }
-  h_leave_garrison({ cqi }) { const c = this.character(cqi); c.in_settlement = false; return { ok: true, cqi }; }
   h_move_status({ cqi }) { return { ok: true, cqi, status: "idle" }; }
   h_relocate_status({ id }) { return { ok: true, id, status: "done" }; }
   h_move_force({ cqi, x, y }) { const c = this.character(cqi); c.lx = x; c.ly = y; c.x = x * 10; c.y = y * 10; return { ok: true, cqi, x, y }; }

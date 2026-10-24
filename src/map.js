@@ -238,7 +238,6 @@ export class MapView {
     const z = Math.min(Math.max(this.view.zoom, 1), 3);
     if (kind === "region") return 16 * z;
     if (item.is_agent) return 7 * z;
-    if (item.in_settlement) return 10 * z;   // garrison sits inside the 16 px settlement ring
     return 13 * z;
   }
 
@@ -250,9 +249,8 @@ export class MapView {
       if (!Number.isFinite(at.x)) return;
       const p = proj.toCanvas(at.x, at.y);
       const d = Math.hypot(p.px - px, p.py - py);
-      // Garrisons only answer on their drawn flag, so the settlement around them stays clickable.
       const size = this.markerSize(kind, item);
-      const reach = kind === "character" && item.in_settlement ? size / 2 + 1 : size + 2;
+      const reach = size + 2;
       if (d <= reach && d < bestDist) { bestDist = d; best = { kind, item }; }
     };
     for (const ch of this.data.characters) consider("character", ch);   // characters sit above settlements

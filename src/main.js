@@ -145,18 +145,15 @@ function mountMap() {
 
 const isLandArmy = (c) => Boolean(c.has_force && !c.is_navy && !c.is_agent);
 
-// Garrisoned armies and navies are drawn on top of their settlement with a smaller marker (map.js);
-// characters in a settlement without a force are not drawn.
+// Forces inside a settlement (the garrison, including a docked navy) are not drawn and have no panel.
 function visibleCharacters() {
   return state.characters.filter(c =>
     (state.factionFilter === "all" || c.faction === state.factionFilter) &&
     (state.showArmies || !isLandArmy(c)) &&
     (state.showNavies || !c.is_navy) &&
     (state.showAgents || !c.is_agent) &&
-    (!c.in_settlement || c.has_force));
+    !c.in_settlement);
 }
-
-const garrisonOf = (regionKey) => state.characters.filter(c => c.in_settlement && c.region === regionKey && c.has_force);
 
 function feedMap() {
   if (!map) return;
@@ -348,7 +345,7 @@ async function loadAllNow() {
     localiseData();
     if (state.selected?.kind === "character") {
       const fresh = state.characters.find(c => c.cqi === state.selected.item.cqi);
-      state.selected = fresh ? { kind: "character", item: fresh } : null;
+      state.selected = fresh && !fresh.in_settlement ? { kind: "character", item: fresh } : null;
     } else if (state.selected?.kind === "region") {
       const fresh = state.regions.find(r => r.key === state.selected.item.key);
       state.selected = fresh ? { kind: "region", item: fresh } : null;
@@ -454,7 +451,7 @@ function characterDrawer(c) {
       ${field(t("typeSubtype"), `${esc(typeLabel(c))}${c.faction_leader ? ` · ${t("leader")}` : ""}${c.has_force ? ` · ${c.is_navy ? t("navy") : t("army")} · ${c.units ?? "?"} ${t("units")}` : ""}`)}
       ${field(t("logicalPos"), `${c.lx}, ${c.ly}`)}
       ${field("CQI", c.cqi)}
-      ${field(t("region"), `${esc(regionName(c.region))}${c.in_settlement ? ` · ${t("garrisoned")}` : ""}`)}
+      ${field(t("region"), esc(regionName(c.region)))}
       <h4>${t("actions")}</h4>
       <div class="action-list">
         ${dialogAction("▲", t(c.is_agent ? "agentExperience" : "generalExperience"), "experience", "add_agent_experience", `data-cqi="${c.cqi}"`)}
@@ -467,7 +464,6 @@ function characterDrawer(c) {
 }
 
 function regionDrawer(r) {
-  const garrison = garrisonOf(r.key);
   const html = `
     <div class="drawer-body">
       <div class="identity">${flagImg(r.owner, 40)}<div><b>${esc(r.name)}</b><small>${esc(factionName(r.owner))}</small></div></div>
@@ -475,7 +471,6 @@ function regionDrawer(r) {
       ${field(t("faction"), esc(factionName(r.owner)))}
       ${field(t("logicalPosSettlement"), Number.isFinite(r.lx) ? `${r.lx}, ${r.ly}` : "—")}
       ${field(t("publicOrder"), esc(r.public_order ?? "—"))}
-      ${garrison.length ? `<h4>${t("garrisonTitle")} · ${garrison.length}</h4><div class="action-list">${garrison.map(c => `<button class="action" data-select-cqi="${c.cqi}">${flagImg(c.faction, 20)}<span>${esc(charName(c))} · ${c.units ?? "?"} ${t("units")}</span></button>`).join("")}</div>` : ""}
       ${can("get_settlement_slots") ? `<h4>${t("buildings")}</h4><div class="slot-list" id="slotList">${slotsHtml(r)}</div>` : ""}
       <h4>${t("actions")}</h4>
       <div class="action-list">
@@ -662,10 +657,6 @@ function bindActions(scope) {
     const r = state.regions.find(x => x.key === b.dataset.selectRegion);
     if (r) selectAndCenter({ kind: "region", item: r });
   });
-  scope.querySelectorAll("[data-select-cqi]").forEach(b => b.onclick = () => {
-    const c = state.characters.find(x => x.cqi === Number(b.dataset.selectCqi));
-    if (c) selectAndCenter({ kind: "character", item: c });
-  });
   scope.querySelectorAll("[data-run]").forEach(b => b.onclick = async () => {
     const type = b.dataset.run;
     let args = b.dataset.args ? JSON.parse(b.dataset.args) : {};
@@ -729,7 +720,7 @@ async function refreshCharacters() {
     localiseData();
     if (state.selected?.kind === "character") {
       const fresh = state.characters.find(c => c.cqi === state.selected.item.cqi);
-      state.selected = fresh ? { kind: "character", item: fresh } : null;
+      state.selected = fresh && !fresh.in_settlement ? { kind: "character", item: fresh } : null;
     }
     feedMap();
     renderDrawer();

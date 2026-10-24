@@ -2,7 +2,7 @@
 - Lua bridge: request.json / response.json polling every 0.1 s in %USERPROFILE%\rome2_web_editor_mod (same protocol as the WARHAMMER II editor)
 - Hook via lua_scripts/episodicscripting.lua: one pack for vanilla, DLC campaigns and total conversions (DEI tested statically; in-game test pending)
 - Read: game info, factions, regions (with owner / province / public order), active characters with display + logical coordinates, force rosters, one-call snapshot
-- Write: treasury_mod, transfer_region_to_faction, set_public_order, replenish/zero action points, add_agent_experience (generals and agents), instant unit ranks via award_experience_level, grant_unit (garrison), create_force, force_declare_war / make_peace / trade / vassal, force_diplomacy, effect bundles, shroud, tax rate, development points, repair, rebellion, end turn
+- Write: treasury_mod, transfer_region_to_faction, set_public_order, replenish/zero action points, add_agent_experience (generals and agents), instant unit ranks via award_experience_level, create_force, force_declare_war / make_peace / trade / vassal, force_diplomacy, effect bundles, shroud, tax rate, development points, repair, rebellion, end turn
 - Web app: live map on the game's label-free HD terrain image with faction flags (settlement / army / navy / agent toggles), click-to-edit panels for generals and settlements, right-click army creation, searchable base-game unit picker, DIPLOMACY tab with the faction table and per-faction diplomacy (war / peace / trade / vassal, allow / block options), raw console
 - Only localised in-game names are shown (factions, regions, cultures, units); the map stays empty until the bridge folder is connected
 - Settings: English / 简体中文 / 繁體中文 interface (remembered)
@@ -12,7 +12,7 @@
 - Lua 桥接：每 0.1 秒轮询 %USERPROFILE%\rome2_web_editor_mod 下的 request.json / response.json（协议与战锤 II 编辑器一致）
 - 通过 lua_scripts/episodicscripting.lua 挂钩：原版、DLC 战役与 DEI 等大型 Mod 共用同一个 pack（DEI 已静态验证，游戏内测试待完成）
 - 读取：战役信息、势力、地区（所属 / 行省 / 治安）、带两套坐标的在图角色、军队编制、一次性快照
-- 写入：金库、地区转移、治安、行动力、将军 / 特工经验（点数）、士兵军衔（立即生效）、赠送单位（驻军）、创建军队、外交强制与选项、效果包、迷雾、税率、发展点数、修复建筑、叛乱、结束回合
+- 写入：金库、地区转移、治安、行动力、将军 / 特工经验（点数）、士兵军衔（立即生效）、创建军队、外交强制与选项、效果包、迷雾、税率、发展点数、修复建筑、叛乱、结束回合
 - 网页端：游戏自带无文字高清地形图 + 势力旗帜的实时地图（城市 / 军队 / 舰队 / 特工开关），点将领 / 城市弹出编辑面板，右键建军，可搜索的本体兵种选择器，「外交」标签含势力表与逐势力外交（宣战 / 和平 / 贸易 / 附庸、允许 / 禁止选项），原始控制台
 - 界面只显示游戏内的本地化名称（势力、地区、文化、单位）；连接桥接文件夹前地图为空
 - 设定：English / 简体中文 / 繁體中文 界面（记住选择）

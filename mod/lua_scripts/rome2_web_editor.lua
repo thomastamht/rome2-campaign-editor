@@ -49,13 +49,13 @@ M.capabilities = {
   make_region_visible_in_shroud = "verified", show_shroud = "verified", scroll_camera = "verified",
   force_rebellion_in_region = "verified",
   force_make_vassal = "engine", force_add_trait = "engine",
-  force_add_ancillary = "engine", grant_unit = "engine", add_development_points_to_region = "engine",
+  force_add_ancillary = "engine", add_development_points_to_region = "engine",
   set_tax_rate = "engine", hide_character = "engine", unhide_character = "engine", award_experience_level = "engine",
   add_agent_experience = "verified", add_force_experience = "engine",
   instantly_repair_building = "engine", end_turn = "engine",
   get_settlement_slots = "verified", repair_building = "verified",
   relocate_force = "composed", relocate_status = "verified",
-  move_force = "engine", move_status = "verified", join_garrison = "engine", leave_garrison = "engine",
+  move_force = "engine", move_status = "verified",
 }
 
 -------------------------------------------------------------------------------
@@ -747,21 +747,6 @@ M.handlers.force_add_ancillary = function(data)
   return ok({ cqi = cqi, ancillary = ancillary })
 end
 
--- Adds one unit to a settlement's garrison. Rome II's only scripted unit spawn is
--- CCQ_SCRIPTING_CREATE_UNIT_AT_SETTLEMENT: a "character_cqi:N" target is accepted without error but
--- adds nothing (seen live 2026-10-21), so armies are refused instead of reporting a fake success.
-M.handlers.grant_unit = function(data)
-  local unit = require_arg(data, "unit", "string")
-  if data.cqi ~= nil then
-    error("Rome II cannot add units to an existing army by script; grant_unit only works on a settlement garrison ({region=key})")
-  end
-  local region = require_arg(data, "region", "string")
-  find_region(region)
-  local target = "settlement:" .. region
-  gi():grant_unit(target, unit)
-  return ok({ target = target, unit = unit })
-end
-
 -- x/y are LOGICAL map coordinates (campaign_manager:create_force compares them with logical_position_x/y).
 -- command_queue is always true: every CA and DEI call site uses it, and running the spawn synchronously
 -- from a TimeTrigger callback crashed the game in testing.
@@ -849,24 +834,6 @@ local function tick_escorts()
       end
     end
   end
-end
-
--- Garrison hop: puts the character's force inside a settlement (join) or back outside (leave).
--- Lookup strings follow grant_unit's "settlement:<region_key>" form; distance rules are the game's.
-M.handlers.join_garrison = function(data)
-  local cqi = require_arg(data, "cqi", "number")
-  local region = require_arg(data, "region", "string")
-  find_character(cqi)
-  find_region(region)
-  gi():join_garrison(char_str(cqi), "settlement:" .. region)
-  return ok({ cqi = cqi, region = region })
-end
-
-M.handlers.leave_garrison = function(data)
-  local cqi = require_arg(data, "cqi", "number")
-  find_character(cqi)
-  gi():leave_garrison(char_str(cqi))
-  return ok({ cqi = cqi })
 end
 
 -- Rome II has no campaign teleport. "Relocate" recreates the force at the target (same faction,

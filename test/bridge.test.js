@@ -258,9 +258,6 @@ test("move_force issues a movement order (enable, replenish, move_to) and report
   vm.request({ type: "move_status", request_id: 15, cqi: 101 });
   assert.equal(vm.response().result.status, "idle");
   assert.match(vm.evalJson(`{ text = FS["rome2_web_editor_bridge.log"] }`).text, /arrived at 40,30/);
-  vm.run(`GI.join_garrison = function(self, ...) table.insert(CALLS, { name = "join_garrison", args = { ... } }) end`);
-  vm.request({ type: "join_garrison", request_id: 13, cqi: 101, region: "rom_africa_zeugitana" });
-  assert.deepEqual(vm.evalJson(`CALLS[#CALLS]`), { name: "join_garrison", args: ["character_cqi:101", "settlement:rom_africa_zeugitana"] });
 });
 
 test("character lookups use character_cqi strings; diplomacy validates both factions", () => {
@@ -274,22 +271,6 @@ test("character lookups use character_cqi strings; diplomacy validates both fact
   assert.match(vm.response().result.error, /faction not found: rom_ghost/);
   vm.request({ type: "scroll_camera", request_id: 16, x: 421.5, y: 312.25 });
   assert.deepEqual(vm.evalJson(`CALLS[#CALLS].args`), [0.5, [421.5, 312.25, 6], [421.5, 312.25, 6]]);
-});
-
-test("grant_unit adds to a settlement garrison and refuses army targets instead of faking success", () => {
-  const vm = newVm();
-  vm.run(`FIRE("FirstTickAfterWorldCreated", {})`);
-  vm.run(`GI.grant_unit = function(self, ...) table.insert(CALLS, { name = "grant_unit", args = { ... } }) end`);
-  vm.request({ type: "grant_unit", request_id: 30, region: "rom_italia_latium", unit: "Rom_Hastati" });
-  assert.equal(vm.response().result.ok, true);
-  assert.deepEqual(vm.evalJson(`CALLS[#CALLS]`), { name: "grant_unit", args: ["settlement:rom_italia_latium", "Rom_Hastati"] });
-  const before = vm.evalJson(`CALLS`).length;
-  vm.request({ type: "grant_unit", request_id: 31, cqi: 101, unit: "Rom_Hastati" });
-  assert.equal(vm.response().result.ok, false);
-  assert.match(vm.response().result.error, /cannot add units to an existing army/);
-  vm.request({ type: "grant_unit", request_id: 32, region: "rom_nowhere", unit: "Rom_Hastati" });
-  assert.match(vm.response().result.error, /region not found: rom_nowhere/);
-  assert.equal(vm.evalJson(`CALLS`).length, before, "nothing reaches the engine for refused targets");
 });
 
 test("experience: characters get add_agent_experience points, an army's units get instant award_experience_level ranks", () => {
@@ -347,10 +328,10 @@ test("per-slot repair sets health to 100 with the verified 3-argument call", () 
 
 });
 
-test("removed handlers are gone: construction, UI probes, kill and dismantle", () => {
+test("removed handlers are gone: construction, UI probes, kill, dismantle and garrison edits", () => {
   const vm = newVm();
   const gone = ["construction_options", "construct_building", "construction_status", "set_building_health", "ui_tree", "ui_find", "ui_click", "ui_key", "ui_panels",
-    "kill_character", "dismantle_building", "instantly_dismantle_building"];
+    "kill_character", "dismantle_building", "instantly_dismantle_building", "grant_unit", "join_garrison", "leave_garrison"];
   const left = vm.evalJson(`(function() local t = {} for _, k in ipairs(${JSON.stringify(gone).replace("[", "{").replace("]", "}")}) do if M.handlers[k] or M.capabilities[k] then table.insert(t, k) end end return { left = t } end)()`);
   assert.deepEqual(left.left ?? [], []);
 });
