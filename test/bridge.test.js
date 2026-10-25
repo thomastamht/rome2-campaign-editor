@@ -120,6 +120,19 @@ test("treasury_mod refuses a negative amount, which Rome II silently ignores", (
   assert.equal(vm.evalJson(`{ n = #CALLS }`).n, 0);
 });
 
+test("debit_treasury puts the same money payload on both dilemma choices", () => {
+  const vm = newVm();
+  vm.run(`FIRE("FirstTickAfterWorldCreated", {})`);
+  vm.request({ type: "debit_treasury", request_id: 3, faction: "rom_carthage", amount: 1200.7 });
+  assert.equal(vm.response().result.ok, true);
+  const payload = "payload { money -1200; }";
+  assert.deepEqual(vm.evalJson(`CALLS[1]`), {
+    name: "trigger_custom_dilemma", args: ["rom_carthage", "move_capital_rome", payload, payload, true],
+  });
+  vm.request({ type: "debit_treasury", request_id: 4, faction: "rom_carthage", amount: 0 });
+  assert.match(vm.response().result.error, /positive/);
+});
+
 test("unknown faction / unknown type / partial JSON are reported or skipped without crashing", () => {
   const vm = newVm();
   vm.run(`FIRE("FirstTickAfterWorldCreated", {})`);
@@ -166,6 +179,22 @@ test("positions_only follows the same characters and leaves out names and forces
   assert.equal(general.region, "rom_italia_latium", "region follows a walking army");
   assert.ok(chars.some(c => c.cqi === 102));
   assert.ok(!chars.some(c => c.cqi === 103));
+});
+
+test("a rebellion's army is listed although faction_list() leaves the rebels out", () => {
+  const vm = newVm();
+  vm.run(`FIRE("FirstTickAfterWorldCreated", {})`);
+  vm.run(`SPAWN_REBEL_ARMY(950)`);
+  vm.request({ type: "get_active_characters", request_id: 6 });
+  const rebel = vm.response().result.find(c => c.cqi === 950);
+  assert.equal(rebel?.faction, "rom_rebel_celt");
+  assert.equal(rebel.units, 2);
+  vm.request({ type: "get_active_characters", request_id: 7, positions_only: true });
+  assert.ok(vm.response().result.some(c => c.cqi === 950));
+  vm.request({ type: "get_force_units", request_id: 8, cqi: 950 });
+  assert.equal(vm.response().result.units.length, 2);
+  vm.request({ type: "get_factions", request_id: 9 });
+  assert.equal(vm.response().result.some(f => f.key === "rom_rebel_celt"), false, "rebels stay out of the faction list");
 });
 
 test("get_snapshot bundles info, factions, regions and characters in one reply", () => {

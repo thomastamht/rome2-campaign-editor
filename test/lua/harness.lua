@@ -159,6 +159,12 @@ table.insert(rome.chars, make_char({ cqi = 102, faction = "rom_rome", type = "sp
 table.insert(rome.chars, make_char({ cqi = 103, faction = "rom_rome", type = "politician", x = 0, y = 0, lx = 0, ly = 0 }))
 table.insert(carthage.chars, make_char({ cqi = 201, faction = "rom_carthage", type = "general", x = 381, y = 182, lx = 38, ly = 18,
   region = "rom_africa_zeugitana", units = { "Car_Gen_Bodyguard", "Car_Hoplites" } }))
+-- As in the game, faction_list() leaves the rebels out; only faction_by_key finds them.
+local rebels = make_faction("rom_rebel_celt", { treasury = 0, human = false, culture = "rom_Barbarian" })
+function SPAWN_REBEL_ARMY(cqi)
+  table.insert(rebels.chars, make_char({ cqi = cqi, faction = "rom_rebel_celt", type = "general", x = 441, y = 291, lx = 44, ly = 29,
+    region = "rom_italia_campania", units = { "Bar_Gen_Bodyguard", "Bar_Spearmen" } }))
+end
 
 MODEL = {
   world = function()
@@ -184,6 +190,7 @@ GI = {
   add_time_trigger = function(_, id, t) table.insert(TIMERS, { id = id, t = t }) end,
   treasury_mod = record("treasury_mod", function(f, amt) FACTIONS[f].treasury_value = FACTIONS[f].treasury_value + amt end),
   transfer_region_to_faction = record("transfer_region_to_faction", function(r, f) REGIONS[r].owner = f end),
+  trigger_custom_dilemma = record("trigger_custom_dilemma"),
   create_force = record("create_force"),
   kill_character = record("kill_character"),
   replenish_action_points = record("replenish_action_points"),

@@ -56,6 +56,7 @@ M.capabilities = {
   get_settlement_slots = "verified", repair_building = "verified",
   relocate_force = "composed", relocate_status = "verified",
   move_force = "engine", move_status = "verified",
+  debit_treasury = "experimental",
 }
 
 -- Reported only while DEI's population script is loaded (see dei_population).
@@ -278,6 +279,59 @@ local function find_faction(key)
   error("faction not found: " .. tostring(key))
 end
 
+-- world():faction_list() leaves out the rebel factions, yet a rebellion's armies stand on the map.
+-- Each campaign has its own set; only the set whose prefix matches the player's faction is looked up.
+local REBEL_FACTIONS = {
+  "rom_rebel_african", "rom_rebel_arabian", "rom_rebel_briton", "rom_rebel_celt", "rom_rebel_dacian",
+  "rom_rebel_eastern", "rom_rebel_egyptian", "rom_rebel_german", "rom_rebel_hellenic", "rom_rebel_iberian",
+  "rom_rebel_illyrian", "rom_rebel_latin", "rom_rebel_nomadic", "rom_rebel_punic", "rom_rebel_spartan",
+  "rom_rebel_thracian",
+  "emp_rebel_african", "emp_rebel_arabian", "emp_rebel_briton", "emp_rebel_celt", "emp_rebel_dacian",
+  "emp_rebel_eastern", "emp_rebel_egyptian", "emp_rebel_german", "emp_rebel_hellenic", "emp_rebel_iberian",
+  "emp_rebel_illyrian", "emp_rebel_latin", "emp_rebel_nomadic", "emp_rebel_punic", "emp_rebel_spartan",
+  "emp_rebel_thracian",
+  "3c_rebel_african", "3c_rebel_arabian", "3c_rebel_celtic", "3c_rebel_eastern", "3c_rebel_germanic",
+  "3c_rebel_latin", "3c_rebel_nomadic",
+  "gaul_rebel_briton", "gaul_rebel_celt", "gaul_rebel_gaul", "gaul_rebel_german", "gaul_rebel_latin",
+  "inv_rebel_carthage", "inv_rebel_etruscan", "inv_rebel_gaul", "inv_rebel_greek", "inv_rebel_iapygian",
+  "inv_rebel_italic", "inv_rebel_nuragic", "inv_rebels_greek",
+  "pel_rebels_aiolian", "pel_rebels_akaian", "pel_rebels_barbarian", "pel_rebels_dorian", "pel_rebels_ionian",
+  "pel_rebels_makedonian", "pel_rebels_other_greeks", "pel_rebels_persian",
+  "pun_rebel_african", "pun_rebel_celt", "pun_rebel_celtiberian", "pun_rebel_hellenic", "pun_rebel_latin",
+  "pun_rebel_punic",
+  "pro_rebels",
+}
+
+local function player_faction_key()
+  local list = world():faction_list()
+  for i = 0, list:num_items() - 1 do
+    local key = list:item_at(i):name()
+    if model():faction_is_local(key) then return key end
+  end
+  return nil
+end
+
+-- Every faction that can have characters on the map: the faction list plus this campaign's rebels.
+local function map_factions()
+  local out, seen = {}, {}
+  local list = world():faction_list()
+  for i = 0, list:num_items() - 1 do
+    local f = list:item_at(i)
+    out[#out + 1] = f
+    seen[f:name()] = true
+  end
+  local player = safe(player_faction_key)
+  local prefix = type(player) == "string" and player:match("^([^_]+_)") or nil
+  if not prefix then return out end
+  for _, key in ipairs(REBEL_FACTIONS) do
+    if not seen[key] and key:sub(1, #prefix) == prefix then
+      local f = safe(function() return world():faction_by_key(key) end)
+      if f and not is_null(f) then out[#out + 1] = f end
+    end
+  end
+  return out
+end
+
 local function find_region(key)
   local r = world():region_manager():region_by_key(key)
   if is_null(r) then error("region not found: " .. tostring(key)) end
@@ -292,24 +346,14 @@ local function is_removed_character(cqi) return M.removed.characters[tostring(cq
 local function find_character(cqi)
   local wanted = tostring(cqi)
   if is_removed_character(wanted) then error("character was killed: cqi " .. wanted) end
-  local factions = world():faction_list()
-  for i = 0, factions:num_items() - 1 do
-    local chars = factions:item_at(i):character_list()
+  for _, f in ipairs(map_factions()) do
+    local chars = f:character_list()
     for j = 0, chars:num_items() - 1 do
       local c = chars:item_at(j)
       if tostring(c:cqi()) == wanted then return c end
     end
   end
   error("character not found: cqi " .. wanted)
-end
-
-local function player_faction_key()
-  local list = world():faction_list()
-  for i = 0, list:num_items() - 1 do
-    local key = list:item_at(i):name()
-    if model():faction_is_local(key) then return key end
-  end
-  return nil
 end
 
 local function ok(extra)
@@ -484,9 +528,7 @@ end
 -- Coordinates and region only. The browser already has names and forces and merges these in.
 local function character_positions()
   local out_list = {}
-  local factions = world():faction_list()
-  for i = 0, factions:num_items() - 1 do
-    local f = factions:item_at(i)
+  for _, f in ipairs(map_factions()) do
     local chars = f:character_list()
     for j = 0, chars:num_items() - 1 do
       local c = chars:item_at(j)
@@ -512,9 +554,7 @@ M.handlers.get_active_characters = function(data)
   if data and data.positions_only == true then return character_positions() end
   local include_all = data and data.include_all == true
   local out_list = {}
-  local factions = world():faction_list()
-  for i = 0, factions:num_items() - 1 do
-    local f = factions:item_at(i)
+  for _, f in ipairs(map_factions()) do
     local fkey = f:name()
     local chars = f:character_list()
     for j = 0, chars:num_items() - 1 do
@@ -568,6 +608,19 @@ M.handlers.treasury_mod = function(data)
   find_faction(faction)
   gi():treasury_mod(faction, amount)
   return ok({ faction = faction, treasury = safe(function() return find_faction(faction):treasury() end) })
+end
+
+-- The only debit Rome II scripts can make is a "money -N" dilemma payload (DEI changeCapital
+-- uses it). Both choices carry the payload, so the money goes whichever one is picked.
+-- The engine resolves the dilemma later, so the returned treasury is the value before it.
+M.handlers.debit_treasury = function(data)
+  local faction = require_arg(data, "faction", "string")
+  local amount = math.floor(require_arg(data, "amount", "number"))
+  if amount <= 0 then error("amount must be a positive number") end
+  local f = find_faction(faction)
+  local payload = "payload { money -" .. amount .. "; }"
+  gi():trigger_custom_dilemma(faction, "move_capital_rome", payload, payload, true)
+  return ok({ faction = faction, amount = amount, treasury = safe(function() return f:treasury() end) })
 end
 
 M.handlers.transfer_region_to_faction = function(data)
