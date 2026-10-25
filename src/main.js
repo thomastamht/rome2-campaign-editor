@@ -736,12 +736,21 @@ async function refreshOwners() {
     if (!owners || typeof owners !== "object") return;
     const changed = state.regions.filter(r => typeof owners[r.key] === "string" && owners[r.key] !== r.owner);
     if (!changed.length) return;
+    const counted = new Set();
+    const recount = (key, delta) => {
+      const f = state.factions.find(x => x.key === key);
+      if (f && Number.isFinite(f.regions)) { f.regions += delta; counted.add(key); }
+    };
     for (const r of changed) {
+      recount(r.owner, -1);
+      recount(owners[r.key], +1);
       r.owner = owners[r.key];
       slotCache.delete(r.key);
     }
     feedMap();
-    if (state.selected?.kind === "region" && changed.some(r => r.key === state.selected.item.key)) renderDrawer();
+    const sel = state.selected;
+    if ((sel?.kind === "region" && changed.some(r => r.key === sel.item.key)) || (sel?.kind === "faction" && counted.has(sel.item.key))) renderDrawer();
+    if (state.sheet === "diplomacy") renderSheet();
   } catch {
     watchFailures += 1;
   }
