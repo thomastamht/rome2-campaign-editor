@@ -60,6 +60,26 @@ function locEntries(packPath) {
   return out;
 }
 
+// Unit keys in DEI's own main_units tables (ZUnused_Old holds the units DEI retired). DB rows are
+// not parsed: every u16-length-prefixed key-like string is taken, and only names the picker knows
+// are kept, so other columns can at most mark a unit DEI references anyway.
+function deiUnitKeys(packs) {
+  const keys = new Set();
+  for (const p of packs.filter(p => /divide_et_impera/i.test(path.basename(p)))) {
+    for (const e of readPackIndex(p).entries) {
+      if (!/^db\\main_units_tables\\/i.test(e.path) || /unused/i.test(e.path)) continue;
+      const buf = readEntry(p, e);
+      for (let i = 0; i + 2 < buf.length; i++) {
+        const n = buf.readUInt16LE(i);
+        if (n < 3 || n > 80 || i + 2 + n > buf.length) continue;
+        const s = buf.toString("latin1", i + 2, i + 2 + n);
+        if (/^[A-Za-z0-9_]+$/.test(s)) keys.add(s);
+      }
+    }
+  }
+  return keys;
+}
+
 function main() {
   const game = gameDir();
   const modPacks = [];
@@ -80,9 +100,10 @@ function main() {
   fs.mkdirSync(outDir, { recursive: true });
 
   // Unit picker catalogue: every land unit with a name, flagged by origin so the UI can offer
-  // "base game only" (mod unit keys do not exist in a vanilla campaign).
+  // "base game only" in vanilla (mod unit keys do not exist there) and DEI's own units in DEI.
   const unitPrefix = "land_units_onscreen_name_";
   const gameUnits = locEntries(path.join(game, "data", "local_en.pack"));
+  const deiUnits = deiUnitKeys(modPacks);
   const units = {};
   const collect = (packs, lang) => {
     for (const p of packs) {
@@ -90,7 +111,7 @@ function main() {
       for (const [k, v] of locEntries(p)) {
         if (!k.startsWith(unitPrefix)) continue;
         const key = k.slice(unitPrefix.length);
-        units[key] ??= { game: gameUnits.has(k) };
+        units[key] ??= { game: gameUnits.has(k), ...(deiUnits.has(key) ? { dei: true } : {}) };
         units[key][lang] = v;
       }
     }
@@ -98,7 +119,8 @@ function main() {
   collect(enPacks, "en");
   collect(zhPacks.filter(isChinese), "zh");
   fs.writeFileSync(path.join(outDir, "units.json"), JSON.stringify(units));
-  console.log(`units: ${Object.keys(units).length} (${Object.values(units).filter(u => u.game).length} base game)`);
+  const count = (flag) => Object.values(units).filter(u => u[flag]).length;
+  console.log(`units: ${Object.keys(units).length} (${count("game")} base game, ${count("dei")} DEI)`);
 
   for (const [lang, packs] of [["en", enPacks], ["zh", zhPacks]]) {
     const merged = new Map();

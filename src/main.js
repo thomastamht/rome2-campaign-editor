@@ -831,11 +831,11 @@ function cycleLanguage() {
 
 // ---------------------------------------------------------------- unit picker
 
-/** Searchable list of units (base game by default); onPick(key) is called per chosen unit. */
+/** Searchable list of units: DEI's own units in a DEI game, else base game by default; onPick(key) is called per chosen unit. */
 function unitPickerMarkup() {
+  const toggle = state.info?.dei ? "" : `<label class="toggle"><input type="checkbox" id="unitBase" checked> ${t("baseGameOnly")}</label>`;
   return `
-    <div class="row"><input id="unitFilter" placeholder="${t("unitFilter")}" autofocus style="flex:1">
-      <label class="toggle"><input type="checkbox" id="unitBase" ${state.info?.dei ? "" : "checked"}> ${t("baseGameOnly")}</label></div>
+    <div class="row"><input id="unitFilter" placeholder="${t("unitFilter")}" autofocus style="flex:1">${toggle}</div>
     <div id="unitList" class="unit-list"></div>`;
 }
 
@@ -845,13 +845,14 @@ function bindUnitPicker(dlg, onPick) {
   const base = dlg.querySelector("#unitBase");
   const render = () => {
     const q = filter.value.trim().toLowerCase();
-    const rows = unitCatalogue({ baseGameOnly: base.checked }).filter(u => !q || u.name.toLowerCase().includes(q) || u.key.toLowerCase().includes(q)).slice(0, 300);
-    list.innerHTML = rows.map(u => `<button type="button" class="unit-row" data-unit="${esc(u.key)}"><b>${esc(u.name)}</b><small>${esc(u.key)}${u.game ? "" : " · mod"}</small></button>`).join("")
+    const only = base ? (base.checked ? "game" : null) : "dei";
+    const rows = unitCatalogue({ only }).filter(u => !q || u.name.toLowerCase().includes(q) || u.key.toLowerCase().includes(q)).slice(0, 300);
+    list.innerHTML = rows.map(u => `<button type="button" class="unit-row" data-unit="${esc(u.key)}"><b>${esc(u.name)}</b><small>${esc(u.key)}${u.game || only === "dei" ? "" : " · mod"}</small></button>`).join("")
       || `<p class="muted">—</p>`;
     list.querySelectorAll("[data-unit]").forEach(b => b.onclick = () => onPick(b.dataset.unit));
   };
   filter.oninput = render;
-  base.onchange = render;
+  if (base) base.onchange = render;
   render();
 }
 

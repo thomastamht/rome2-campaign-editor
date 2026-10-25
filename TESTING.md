@@ -75,7 +75,7 @@ mkdir "D:\Steam\steamapps\common\Total War Rome II\data\campaigns\main_rome\rome
 | 士兵经验（填 1） | 全军每个单位立即 +1 个 V 字章；失败 → `award_experience_level` 参数顺序 |
 | 右键地图空地 → 创建军队（弹窗里从单位列表点选，或直接填 `Rom_Hastati,Rom_Hastati,Rom_Principes`） | 目标地区附近出现新军队。失败且提示坐标 → 看逻辑坐标是否离谱（应与同地区角色的 logical 接近） |
 
-单位列表默认「仅本体兵种」（1 500 多个原版 / DLC 单位，含中文名）；取消勾选可看到已装 Mod（如 DEI）的全部单位。
+原版战役里单位列表默认「仅本体兵种」（1 500 多个原版 / DLC 单位，含中文名），取消勾选可看到已装 Mod 的全部单位；DEI 战役里只列出 DEI 自己的单位（4 200 多个），没有这个勾选框。
 
 经验的原理：将军 / 特工自身经验用 `add_agent_experience(角色, 点数)`（CA 序章就用它给将军 Silanus 升级）；
 士兵经验用 `award_experience_level(将军, 级数)`，立即给这位将军军队里的每个单位升军衔（最高 9 级）——这也是最早那版「增加经验」用的调用。

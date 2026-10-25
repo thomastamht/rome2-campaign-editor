@@ -69,11 +69,11 @@ export function personName(value) {
 
 const TEST_UNIT = /^test_|placeholder|dummy/i;
 
-/** Unit catalogue for pickers: [{ key, name, game }] sorted by display name. */
-export function unitCatalogue({ baseGameOnly = true } = {}) {
+/** Unit catalogue for pickers: [{ key, name, game }] sorted by display name. only: "game" | "dei" | null. */
+export function unitCatalogue({ only = "game" } = {}) {
   const dataLang = dataLangOf(uiLang);
   return Object.entries(units)
-    .filter(([key, u]) => (!baseGameOnly || u.game) && !TEST_UNIT.test(key))
+    .filter(([key, u]) => (!only || u[only]) && !TEST_UNIT.test(key))
     .map(([key, u]) => ({ key, name: tidy(u[dataLang] ?? u.en ?? key), game: Boolean(u.game) }))
     .sort((a, b) => a.name.localeCompare(b.name));
 }

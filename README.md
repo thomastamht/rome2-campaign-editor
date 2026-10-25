@@ -51,7 +51,7 @@ appear once the bridge folder is connected and the game has written its ready ma
 | Live map (armies, navies, agents, settlements) on the game's own terrain image, zoom/pan, click a marker for its panel, right-click to spawn | `get_snapshot` (or `get_active_characters` + `get_regions_detailed`), `create_force` |
 | Diplomacy tab: searchable faction table (click a faction for its panel: set treasury) | `get_factions`, `treasury_mod` |
 | Regions: owner transfer, public order, population surplus, rebellion (each via a dialog); building list with per-slot repair (⚒). Rome II scripts cannot construct or upgrade buildings, and dismantling crashed the game | `transfer_region_to_faction`, `set_public_order`, `add_development_points_to_region`, `force_rebellion_in_region`, `get_settlement_slots`, `repair_building` |
-| DEI only (shown when DEI's population script is loaded): a region's population per class (nobles, citizens, poor, foreigners) via a dialog; the unit picker lists mod units by default | `get_region_population`, `set_region_population` |
+| DEI only (shown when DEI's population script is loaded): a region's population per class (nobles, citizens, poor, foreigners) via a dialog; the unit picker lists only DEI's own units | `get_region_population`, `set_region_population` |
 | Characters: general / agent experience, instant unit ranks for the whole force, replenish / zero AP. Settlement garrisons are not shown | `award_experience_level`, `add_agent_experience`, `add_force_experience`, `replenish_action_points`, `zero_action_points` |
 | Faction panel → diplomacy with a chosen counterpart: force war, peace, trade, vassal | `force_declare_war`, `force_make_peace`, `force_make_trade_agreement`, `force_make_vassal` |
 | Settings: language (English / 简体中文 / 繁體中文, remembered) | — |
@@ -98,8 +98,9 @@ in the engine are battle-side), so map markers are deliberately **not draggable*
 and use "Replenish action points" from the character panel when they run dry. Coordinates for `create_force`
 are *logical* tiles; the UI fits the display→logical transform at runtime from characters that report both (`lx/ly` vs `x/y`).
 
-Unit names for the picker come from `public/loc/units.json` (`{ key: { game, en, zh } }`, written by
-`tools/extract-loc.mjs`; `game: true` marks units present in CA's own packs, the default filter).
+Unit names for the picker come from `public/loc/units.json` (`{ key: { game, dei, en, zh } }`, written by
+`tools/extract-loc.mjs`; `game: true` marks units present in CA's own packs, the default filter in vanilla;
+`dei: true` marks units in DEI's own `main_units` tables, the only ones listed in a DEI game).
 
 ## Verification status / 验证状态
 
