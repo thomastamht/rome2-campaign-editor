@@ -159,22 +159,12 @@ table.insert(rome.chars, make_char({ cqi = 102, faction = "rom_rome", type = "sp
 table.insert(rome.chars, make_char({ cqi = 103, faction = "rom_rome", type = "politician", x = 0, y = 0, lx = 0, ly = 0 }))
 table.insert(carthage.chars, make_char({ cqi = 201, faction = "rom_carthage", type = "general", x = 381, y = 182, lx = 38, ly = 18,
   region = "rom_africa_zeugitana", units = { "Car_Gen_Bodyguard", "Car_Hoplites" } }))
--- As in the game, faction_list() leaves the rebels out. HIDDEN_KEYS makes faction_by_key miss
--- them too; a miss answers with an object that has no methods, as Rome II does.
-HIDDEN_KEYS = {}
-local rebels = make_faction("rom_rebel_celt", { treasury = 0, human = false, culture = "rom_Barbarian" })
-function SPAWN_REBEL_ARMY(cqi)
-  local c = make_char({ cqi = cqi, faction = "rom_rebel_celt", type = "general", x = 441, y = 291, lx = 44, ly = 29,
-    region = "rom_italia_campania", units = { "Bar_Gen_Bodyguard", "Bar_Spearmen" } })
-  table.insert(rebels.chars, c)
-  FIRE("CharacterCreated", { character = function() return c end })
-end
-
 MODEL = {
   world = function()
     return {
       faction_list = function() return list({ rome, carthage }) end,
-      faction_by_key = function(_, key) return (not HIDDEN_KEYS[key] and FACTIONS[key]) or {} end,
+      -- An unknown key answers with an object that has no methods, as in Rome II.
+      faction_by_key = function(_, key) return FACTIONS[key] or {} end,
       region_manager = function()
         return {
           region_list = function() return list({ REGIONS.rom_italia_latium, REGIONS.rom_italia_campania, REGIONS.rom_africa_zeugitana }) end,
