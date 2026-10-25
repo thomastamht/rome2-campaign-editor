@@ -343,6 +343,37 @@ test("per-slot repair sets health to 100 with the verified 3-argument call", () 
   vm.request({ type: "repair_building", request_id: 71, region: "rom_italia_latium", slot: 1 });
   assert.match(vm.response().result.error, /slot 1 has no building/);
 });
+test("DEI population: offered only with DEI's script, edited through its SetRegionPop", () => {
+  const vm = newVm();
+  vm.run(`FIRE("FirstTickAfterWorldCreated", {})`);
+  vm.request({ type: "get_game_info", request_id: 80 });
+  let info = vm.response().result;
+  assert.equal(info.dei, false);
+  assert.equal(info.capabilities.set_region_population, undefined);
+  vm.request({ type: "get_region_population", request_id: 81, region: "rom_italia_latium" });
+  assert.match(vm.response().result.error, /DEI population script is not loaded/);
+
+  vm.run(`
+    local regions = { rom_italia_latium = { 100, 2000, 30000, 400 } }
+    package.loaded["lua_scripts.population"] = {
+      UIPopulation = { rom_italia_latium = { 100, 2000, 30000, 400 } },
+      GetRegionPop = function(region) return regions[region:name()] end,
+      SetRegionPop = function(name, up, mid, low, foreign) regions[name] = { up, mid, low, foreign } end,
+    }`);
+  vm.request({ type: "get_game_info", request_id: 82 });
+  info = vm.response().result;
+  assert.equal(info.dei, true);
+  assert.equal(info.capabilities.set_region_population, "verified");
+  vm.request({ type: "get_region_population", request_id: 83, region: "rom_italia_latium" });
+  assert.deepEqual(vm.response().result.population, { upper: 100, middle: 2000, lower: 30000, foreign: 400 });
+  vm.request({ type: "set_region_population", request_id: 84, region: "rom_italia_latium", lower: 45000 });
+  assert.deepEqual(vm.response().result.population, { upper: 100, middle: 2000, lower: 45000, foreign: 400 });
+  assert.deepEqual(vm.evalJson(`package.loaded["lua_scripts.population"].UIPopulation.rom_italia_latium`), [100, 2000, 45000, 400],
+    "DEI's panels read UIPopulation");
+  vm.request({ type: "get_region_population", request_id: 85, region: "rom_italia_campania" });
+  assert.match(vm.response().result.error, /no DEI population/);
+});
+
 test("removed handlers are gone: construction, UI probes, kill, dismantle and garrison edits", () => {
   const vm = newVm();
   const gone = ["construction_options", "construct_building", "construction_status", "set_building_health", "ui_tree", "ui_find", "ui_click", "ui_key", "ui_panels",

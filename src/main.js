@@ -484,6 +484,7 @@ function regionDrawer(r) {
         ${dialogAction("⇄", t("transfer"), "transfer", "transfer_region_to_faction", `data-region="${esc(r.key)}"`)}
         ${dialogAction("☺", t("publicOrder"), "publicOrder", "set_public_order", `data-region="${esc(r.key)}"`)}
         ${dialogAction("▲", t("develop"), "develop", "add_development_points_to_region", `data-region="${esc(r.key)}"`)}
+        ${can("set_region_population") ? dialogAction("☗", t("population"), "population", "set_region_population", `data-region="${esc(r.key)}"`) : ""}
         ${Number.isFinite(r.lx) ? action("⚑", t("rebellion"), "force_rebellion_in_region", `data-args='${esc(JSON.stringify({ region: r.key, units: 4, x: r.lx, y: r.ly }))}'`) : ""}
       </div>
     </div>`;
@@ -662,6 +663,7 @@ function bindActions(scope) {
       experience: () => c && characterExperienceDialog(c),
       unitExperience: () => c && unitExperienceDialog(c),
       develop: () => r && populationSurplusDialog(r),
+      population: () => r && populationDialog(r),
     }[b.dataset.dialog];
     open?.();
   });
@@ -786,7 +788,7 @@ function cycleLanguage() {
 function unitPickerMarkup() {
   return `
     <div class="row"><input id="unitFilter" placeholder="${t("unitFilter")}" autofocus style="flex:1">
-      <label class="toggle"><input type="checkbox" id="unitBase" checked> ${t("baseGameOnly")}</label></div>
+      <label class="toggle"><input type="checkbox" id="unitBase" ${state.info?.dei ? "" : "checked"}> ${t("baseGameOnly")}</label></div>
     <div id="unitList" class="unit-list"></div>`;
 }
 
@@ -882,6 +884,34 @@ function populationSurplusDialog(r) {
   openDialog(t("develop"), body, dlg => {
     const points = Number(dlg.querySelector("#surplus").value);
     if (Number.isFinite(points)) run("add_development_points_to_region", { region: r.key, points }, { label: t("develop") });
+  });
+}
+
+// DEI's population classes, in the bridge's field names.
+const POPULATION_CLASSES = { upper: "popUpper", middle: "popMiddle", lower: "popLower", foreign: "popForeign" };
+
+async function populationDialog(r) {
+  let population;
+  busy(1);
+  try {
+    population = assertOk(await state.bridge.request("get_region_population", { region: r.key }), "get_region_population").population;
+  } catch (e) {
+    toast(e.message);
+    return;
+  } finally { busy(-1); }
+  const inputs = Object.entries(POPULATION_CLASSES).map(([cls, label]) =>
+    `<label>${t(label)}<input type="number" id="pop_${cls}" min="0" value="${esc(population[cls] ?? 0)}"></label>`).join("");
+  const body = `
+    <p class="muted">${esc(r.name)}</p>
+    ${inputs}
+    <p class="muted">${t("populationHint")}</p>`;
+  openDialog(t("population"), body, dlg => {
+    const args = { region: r.key };
+    for (const cls of Object.keys(POPULATION_CLASSES)) {
+      const raw = dlg.querySelector(`#pop_${cls}`).value;
+      if (raw !== "" && Number.isFinite(Number(raw))) args[cls] = Number(raw);
+    }
+    run("set_region_population", args, { label: t("population"), refresh: false });
   });
 }
 

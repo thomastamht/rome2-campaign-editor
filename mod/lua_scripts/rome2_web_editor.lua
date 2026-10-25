@@ -58,6 +58,9 @@ M.capabilities = {
   move_force = "engine", move_status = "verified",
 }
 
+-- Reported only while DEI's population script is loaded (see dei_population).
+M.dei_capabilities = { get_region_population = "verified", set_region_population = "verified" }
+
 -------------------------------------------------------------------------------
 -- logging / paths
 -------------------------------------------------------------------------------
@@ -319,6 +322,22 @@ end
 -- read handlers
 -------------------------------------------------------------------------------
 
+-- DEI's lua_scripts\population.lua is a module(); its region table is local to it, so the only way
+-- in is the functions it exports. It is never required here: in vanilla it does not exist.
+local function dei_population()
+  local pop = package.loaded["lua_scripts.population"]
+  if type(pop) == "table" and type(pop.GetRegionPop) == "function" and type(pop.SetRegionPop) == "function" then return pop end
+  return nil
+end
+
+local function current_capabilities()
+  if not dei_population() then return M.capabilities end
+  local all = {}
+  for k, v in pairs(M.capabilities) do all[k] = v end
+  for k, v in pairs(M.dei_capabilities) do all[k] = v end
+  return all
+end
+
 M.handlers.heartbeat = function()
   return ok({ game = "rome2", version = M.version, turn = safe(function() return model():turn_number() end) })
 end
@@ -334,7 +353,8 @@ M.handlers.get_game_info = function()
     turn = safe(function() return model():turn_number() end),
     player_faction = safe(player_faction_key),
     is_multiplayer = safe(function() return model():is_multiplayer() end, false),
-    capabilities = M.capabilities,
+    dei = dei_population() ~= nil,
+    capabilities = current_capabilities(),
   })
 end
 
@@ -571,6 +591,45 @@ M.handlers.add_development_points_to_region = function(data)
   find_region(region)
   gi():add_development_points_to_region(region, points)
   return ok({ region = region })
+end
+
+-- DEI population classes, in DEI's order: nobles, citizens, poor, foreigners.
+local POPULATION_CLASSES = { "upper", "middle", "lower", "foreign" }
+
+local function region_population(pop, region)
+  local values = pop.GetRegionPop(region)
+  if type(values) ~= "table" then error("no DEI population for region " .. region:name()) end
+  local out_t = {}
+  for i, class in ipairs(POPULATION_CLASSES) do out_t[class] = values[i] end
+  return out_t
+end
+
+M.handlers.get_region_population = function(data)
+  local key = require_arg(data, "region", "string")
+  local pop = dei_population() or error("the DEI population script is not loaded")
+  return ok({ region = key, population = region_population(pop, find_region(key)) })
+end
+
+-- Classes left out of the request keep their value. SetRegionPop clamps to DEI's limits; like DEI's
+-- own scripts, the UIPopulation copy that DEI's panels read is updated alongside.
+M.handlers.set_region_population = function(data)
+  local key = require_arg(data, "region", "string")
+  local pop = dei_population() or error("the DEI population script is not loaded")
+  local region = find_region(key)
+  local current = region_population(pop, region)
+  local values = {}
+  for i, class in ipairs(POPULATION_CLASSES) do
+    local v = data[class]
+    if v ~= nil and type(v) ~= "number" then error(class .. " must be a number") end
+    values[i] = v or current[class]
+  end
+  pop.SetRegionPop(key, values[1], values[2], values[3], values[4])
+  local after = region_population(pop, region)
+  local ui = type(pop.UIPopulation) == "table" and pop.UIPopulation[key]
+  if type(ui) == "table" then
+    for i, class in ipairs(POPULATION_CLASSES) do ui[i] = after[class] end
+  end
+  return ok({ region = key, population = after })
 end
 
 M.handlers.set_tax_rate = function(data)
@@ -1053,7 +1112,7 @@ local function write_ready_marker()
     folder_kind = M.folder_kind,
     campaign = safe(function() return model():campaign_name() end),
     turn = safe(function() return model():turn_number() end),
-    capabilities = M.capabilities,
+    capabilities = current_capabilities(),
   })
 end
 
