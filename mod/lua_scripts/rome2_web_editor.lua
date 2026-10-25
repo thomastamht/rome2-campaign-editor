@@ -268,9 +268,17 @@ local function localise_key(key)
   return key
 end
 
-local function find_faction(key)
+-- faction_by_key answers an unknown key with an object that has no methods (not even
+-- is_null_interface), so a faction only counts when it reports its own key.
+local function faction_by_key(key)
   local f = safe(function() return world():faction_by_key(key) end)
-  if f and not is_null(f) then return f end
+  if f and safe(function() return f:name() end) == key then return f end
+  return nil
+end
+
+local function find_faction(key)
+  local f = faction_by_key(key)
+  if f then return f end
   local list = world():faction_list()
   for i = 0, list:num_items() - 1 do
     local item = list:item_at(i)
@@ -281,6 +289,7 @@ end
 
 -- world():faction_list() leaves out the rebel factions, yet a rebellion's armies stand on the map.
 -- Each campaign has its own set; only the set whose prefix matches the player's faction is looked up.
+-- A rebel faction is also learnt when one of its characters is created or its turn starts.
 local REBEL_FACTIONS = {
   "rom_rebel_african", "rom_rebel_arabian", "rom_rebel_briton", "rom_rebel_celt", "rom_rebel_dacian",
   "rom_rebel_eastern", "rom_rebel_egyptian", "rom_rebel_german", "rom_rebel_hellenic", "rom_rebel_iberian",
@@ -311,7 +320,35 @@ local function player_faction_key()
   return nil
 end
 
--- Every faction that can have characters on the map: the faction list plus this campaign's rebels.
+-- Rebel factions by key: true when faction_by_key finds them, else the object an event handed over.
+-- Reset when a campaign loads.
+local function forget_rebels() M.rebels = nil end
+
+local function rebels()
+  if M.rebels then return M.rebels end
+  M.rebels = {}
+  local player = safe(player_faction_key)
+  local prefix = type(player) == "string" and player:match("^([^_]+_)") or nil
+  if prefix then
+    for _, key in ipairs(REBEL_FACTIONS) do
+      if key:sub(1, #prefix) == prefix and faction_by_key(key) then M.rebels[key] = true end
+    end
+  end
+  local found = {}
+  for key in pairs(M.rebels) do found[#found + 1] = key end
+  log("rebel factions found by key: " .. (#found > 0 and table.concat(found, ", ") or "none"))
+  return M.rebels
+end
+
+function M.learn_rebel(f)
+  local key = safe(function() return f:name() end)
+  if type(key) ~= "string" or rebels()[key] ~= nil then return end
+  if not (safe(function() return f:is_rebel() end) == true or key:find("rebel", 1, true)) then return end
+  if faction_by_key(key) then M.rebels[key] = true else M.rebels[key] = f end
+  log("rebel faction learnt: " .. key .. (M.rebels[key] == true and "" or " (not found by key)"))
+end
+
+-- Every faction that can have characters on the map: the faction list plus the rebels.
 local function map_factions()
   local out, seen = {}, {}
   local list = world():faction_list()
@@ -320,14 +357,9 @@ local function map_factions()
     out[#out + 1] = f
     seen[f:name()] = true
   end
-  local player = safe(player_faction_key)
-  local prefix = type(player) == "string" and player:match("^([^_]+_)") or nil
-  if not prefix then return out end
-  for _, key in ipairs(REBEL_FACTIONS) do
-    if not seen[key] and key:sub(1, #prefix) == prefix then
-      local f = safe(function() return world():faction_by_key(key) end)
-      if f and not is_null(f) then out[#out + 1] = f end
-    end
+  for key, held in pairs(rebels()) do
+    local f = held == true and faction_by_key(key) or held
+    if not seen[key] and f and safe(function() return f:name() end) == key then out[#out + 1] = f end
   end
   return out
 end
@@ -1203,6 +1235,7 @@ function M.start(game_interface, reason)
   M.active = true
   M.request_id = -1
   forget_removed()
+  forget_rebels()
   local ok_marker, err = pcall(write_ready_marker)
   if not ok_marker then log("ready marker failed: " .. tostring(err)) else log("ready marker written") end
   schedule_poll()
@@ -1234,6 +1267,12 @@ function M.attach(scripting)
   end, false)
   scripting.AddEventCallBack("TimeTrigger", function(context) M.on_time_trigger(context) end, false)
   scripting.AddEventCallBack("ScriptedForceCreated", function() pcall(M.on_force_created) end, false)
+  scripting.AddEventCallBack("CharacterCreated", function(context)
+    if M.active then pcall(function() M.learn_rebel(context:character():faction()) end) end
+  end, false)
+  scripting.AddEventCallBack("FactionTurnStart", function(context)
+    if M.active then pcall(function() M.learn_rebel(context:faction()) end) end
+  end, false)
   scripting.AddEventCallBack("UIDestroyed", function() M.stop() end, false)
   log("attached v" .. M.version .. " (" .. tostring(_VERSION) .. ")")
 end

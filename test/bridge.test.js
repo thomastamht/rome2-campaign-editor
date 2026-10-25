@@ -197,6 +197,17 @@ test("a rebellion's army is listed although faction_list() leaves the rebels out
   assert.equal(vm.response().result.some(f => f.key === "rom_rebel_celt"), false, "rebels stay out of the faction list");
 });
 
+test("a rebel faction faction_by_key cannot find is learnt from the army it creates", () => {
+  const vm = newVm();
+  vm.run(`HIDDEN_KEYS["rom_rebel_celt"] = true`);
+  vm.run(`FIRE("FirstTickAfterWorldCreated", {})`);
+  vm.request({ type: "get_active_characters", request_id: 6, positions_only: true });
+  assert.equal(vm.response().result.length, 3, "the method-less miss is skipped, not called");
+  vm.run(`SPAWN_REBEL_ARMY(951)`);
+  vm.request({ type: "get_active_characters", request_id: 7, positions_only: true });
+  assert.ok(vm.response().result.some(c => c.cqi === 951));
+});
+
 test("get_snapshot bundles info, factions, regions and characters in one reply", () => {
   const vm = newVm();
   vm.run(`FIRE("FirstTickAfterWorldCreated", {})`);
