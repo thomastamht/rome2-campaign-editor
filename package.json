@@ -7,6 +7,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build --base=./",
     "build:pack": "node tools/build-pack.mjs",
+    "build:dei-patch": "node tools/build-pack.mjs --dei-patch",
     "build:all": "npm run build && npm run build:pack",
     "read-pack": "node tools/read-pack.mjs",
     "test": "node --test"

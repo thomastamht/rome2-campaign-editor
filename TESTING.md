@@ -119,7 +119,7 @@ Rome II 脚本接口只能强制宣战、和平、贸易协定和附庸；互不
 
 ## 3. 第二轮：DEI
 
-1. 启动器恢复你平时的 DEI 模组组合（参考桌面上的 `used_mods.backup.txt`），**保持** `rome2_web_editor.pack` 勾选。加载顺序不重要（没有任何已装 Mod 替换 `episodicscripting.lua`）。
+1. 启动器恢复你平时的 DEI 模组组合（参考桌面上的 `used_mods.backup.txt`），**保持** `rome2_web_editor.pack` 勾选。`DEI综合调整.pack` 自带一份 `episodicscripting.lua`，会盖掉本 Mod 的挂钩，所以还要勾选 `!rome2_web_editor_dei_patch.pack`（`npm run build:dei-patch` 生成），并把它排在 `DEI综合调整.pack` **上面**。不勾这个补丁，桥接日志里不会出现 `[hook:episodic] attached`。
 2. 新开或读一局 DEI 战役，重复第 1 节第 3–4 步和第 2 节全部。
 3. 额外确认 DEI 自己的东西没坏：人口界面、补给、改革弹窗、第一回合事件都正常。它们和桥接共用 `episodicscripting.lua`，理论上互不影响，但要看一眼。
 4. 创建军队时用 DEI 的单位 key：先对任意 DEI 军队跑 `get_force_units`，复制里面的 key。

@@ -130,10 +130,15 @@ npm test            # Lua bridge (fengari), protocol, map, demo
 npm run dev         # http://127.0.0.1:5173
 npm run build       # dist/ (deployable static site, e.g. GitHub Pages)
 npm run build:pack  # release/rome2_web_editor.pack from your installed game files
+npm run build:dei-patch  # also release/!rome2_web_editor_dei_patch.pack (see below)
 node tools/read-pack.mjs <file.pack> [--filter regex] [--cat entry]
 ```
 
-Fallback for a mod that also replaces `lua_scripts\episodicscripting.lua`:
+DEI itself does not replace `lua_scripts\episodicscripting.lua`, but a DEI tweak pack in `data\` may
+(`DEI综合调整.pack` does). `npm run build:dei-patch` (or `--dei-patch "<pack>"`) appends the hook to that
+pack's copy and writes `release/!rome2_web_editor_dei_patch.pack`; enable it above that pack in the launcher.
+
+Fallback for any other mod that also replaces `lua_scripts\episodicscripting.lua`:
 `node tools/build-pack.mjs --scripting-overlay "<that mod>.pack"` writes
 `release/!rome2_web_editor_overlay_<mod>.pack`, which hooks every `campaigns\*\scripting.lua` of that mod
 instead. It must load before that mod. Not needed for DEI, DEI submods, Diplomacy Reforged or vanilla.
@@ -143,7 +148,7 @@ instead. It must load before that mod. Not needed for DEI, DEI submods, Diplomac
 ```
 mod/lua_scripts/rome2_web_editor.lua       bridge: transport, handlers, capabilities
 mod/lua_scripts/rome2_web_editor_json.lua  rxi json.lua 0.1.2 (MIT)
-tools/build-pack.mjs                       PFH4 pack writer (+ episodicscripting hook, overlay mode)
+tools/build-pack.mjs                       PFH4 pack writer (+ episodicscripting hook, DEI patch, overlay mode)
 tools/read-pack.mjs, tools/pack-format.mjs pack inspection / format helpers
 src/protocol.js                            FileBridge (File System Access API, request_id polling)
 src/map.js                                 canvas map (click to select, right-click to create), coordinate fitting
