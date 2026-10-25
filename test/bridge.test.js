@@ -112,6 +112,14 @@ test("treasury_mod mutates through game_interface and reports the new value", ()
   assert.deepEqual(vm.evalJson(`CALLS[1]`), { name: "treasury_mod", args: ["rom_rome", 1500] });
 });
 
+test("treasury_mod refuses a negative amount, which Rome II silently ignores", () => {
+  const vm = newVm();
+  vm.run(`FIRE("FirstTickAfterWorldCreated", {})`);
+  vm.request({ type: "treasury_mod", request_id: 3, faction: "rom_carthage", amount: -1000 });
+  assert.match(vm.response().result.error, /cannot lower a treasury/);
+  assert.equal(vm.evalJson(`{ n = #CALLS }`).n, 0);
+});
+
 test("unknown faction / unknown type / partial JSON are reported or skipped without crashing", () => {
   const vm = newVm();
   vm.run(`FIRE("FirstTickAfterWorldCreated", {})`);

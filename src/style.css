@@ -70,6 +70,8 @@ header { height: 54px; flex: none; background: #202527; border-bottom: 1px solid
 .table { border: 1px solid #363d3e; }
 .thead, .tr { display: grid; align-items: center; text-align: left; gap: 12px; padding: 8px 12px; }
 .thead { font-size: 9px; letter-spacing: .7px; color: #9ba19f; background: #202527; }
+.thead .th-sort { background: none; border: 0; padding: 0; font-size: inherit; letter-spacing: inherit; color: inherit; }
+.thead .th-sort:hover:not(:disabled) { background: none; color: #e6e2d9; }
 .tr { width: 100%; background: #191e20; border: 0; border-radius: 0; border-top: 1px solid #303738; font-size: 12px; }
 .tr:hover { background: #272e30; }
 .tr > span { display: flex; align-items: center; gap: 8px; min-width: 0; }

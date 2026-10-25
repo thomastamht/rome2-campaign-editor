@@ -29,6 +29,7 @@ const state = {
   showNavies: true,
   showAgents: true,
   search: "",
+  factionSort: null,      // { key: "regions" | "treasury", desc } for the diplomacy table
   log: [],
   busy: 0,
 };
@@ -546,6 +547,7 @@ function factionDrawer(f) {
       <h4>${t("nationalTreasury")}</h4>
       <div class="action-list">
         <div class="action-row"><input type="number" id="setTo" value="${esc(f.treasury ?? 0)}" step="500">${action("=", t("setTo"), "treasury_mod", 'data-treasury="set"')}</div>
+        <small class="muted">${t("treasuryHint")}</small>
       </div>
       ${diplomacySection(f)}
     </div>`;
@@ -587,10 +589,13 @@ function renderSheet() {
 function factionsView() {
   const q = state.search.toLowerCase();
   const rows = state.factions.filter(f => `${f.name} ${f.culture_name} ${f.subculture_name}`.toLowerCase().includes(q));
+  const sort = state.factionSort;
+  if (sort) rows.sort((a, b) => ((Number(b[sort.key]) || 0) - (Number(a[sort.key]) || 0)) * (sort.desc ? 1 : -1));
+  const sortable = (key, label) => `<button class="th-sort" data-sort="${key}">${label}${sort?.key === key ? (sort.desc ? " ▼" : " ▲") : ""}</button>`;
   return `
     <div class="toolbar"><input id="search" placeholder="${t("search")}" value="${esc(state.search)}"><span>${rows.length}</span></div>
     <div class="table">
-      <div class="thead cols-f"><span>${t("faction")}</span><span>${t("culture")}</span><span>${t("regionsCol")}</span><span>${t("forcesCol")}</span><span>${t("treasury")}</span><span>${t("human")}</span></div>
+      <div class="thead cols-f"><span>${t("faction")}</span><span>${t("culture")}</span>${sortable("regions", t("regionsCol"))}<span>${t("forcesCol")}</span>${sortable("treasury", t("treasury"))}<span>${t("human")}</span></div>
       ${rows.map(f => `<button class="tr cols-f" data-select-faction="${esc(f.key)}">
         <span>${flagImg(f.key, 20)}${esc(f.name)}</span><span>${esc(f.culture_name)}</span><span>${f.regions}</span><span>${f.forces}</span><span>${fmt(f.treasury)}</span><span>${f.is_human ? "●" : ""}${f.is_dead ? " ✝" : ""}</span></button>`).join("")}
     </div>`;
@@ -630,6 +635,12 @@ function bindActions(scope) {
     const x = document.querySelector("#search"); x?.focus(); x?.setSelectionRange(pos, pos);
   });
   scope.querySelector("#diploB")?.addEventListener("change", e => { state.diploB = e.target.value; });
+  // Largest first on the first click, then the order flips.
+  scope.querySelectorAll("[data-sort]").forEach(b => b.onclick = () => {
+    const key = b.dataset.sort;
+    state.factionSort = { key, desc: state.factionSort?.key === key ? !state.factionSort.desc : true };
+    renderSheet();
+  });
   scope.querySelectorAll("[data-select-faction]").forEach(b => b.onclick = () => {
     const f = state.factions.find(x => x.key === b.dataset.selectFaction);
     state.selected = f ? { kind: "faction", item: f } : null; renderDrawer();
@@ -640,6 +651,7 @@ function bindActions(scope) {
     if (b.dataset.treasury) {
       const f = state.selected?.item;
       args = { faction: f?.key, amount: Number(scope.querySelector("#setTo").value) - Number(f?.treasury ?? 0) };
+      if (args.amount < 0) { toast(t("treasuryHint")); return; }
     }
     if (b.dataset.diplo) {
       const a = state.selected?.item?.key, bb = scope.querySelector("#diploB").value;

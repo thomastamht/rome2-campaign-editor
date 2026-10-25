@@ -101,7 +101,12 @@ export class DemoBridge {
   h_get_active_characters() { return structuredClone(this.characters); }
   h_get_snapshot() { return { info: this.h_get_game_info(), factions: this.h_get_factions(), regions: this.h_get_regions_detailed(), characters: this.h_get_active_characters() }; }
   h_get_force_units({ cqi }) { const c = this.character(cqi); return { ok: true, cqi: c.cqi, units: Array.from({ length: c.units ?? 0 }, (_, i) => ({ key: i === 0 ? "Rom_Gen_Bodyguard" : "Rom_Hastati", strength: 100 })) }; }
-  h_treasury_mod({ faction, amount }) { const f = this.faction(faction); f.treasury += Number(amount); return { ok: true, faction, treasury: f.treasury }; }
+  h_treasury_mod({ faction, amount }) {
+    if (Number(amount) < 0) throw new Error("Rome II cannot lower a treasury; only positive amounts are applied");
+    const f = this.faction(faction);
+    f.treasury += Number(amount);
+    return { ok: true, faction, treasury: f.treasury };
+  }
   h_transfer_region_to_faction({ region, faction }) { this.faction(faction); const r = this.region(region); r.owner = faction; return { ok: true, region, owner: faction }; }
   h_set_public_order({ region, value }) { this.region(region).public_order = Number(value); return { ok: true, region }; }
   h_replenish_action_points({ cqi }) { this.character(cqi); return { ok: true, cqi }; }

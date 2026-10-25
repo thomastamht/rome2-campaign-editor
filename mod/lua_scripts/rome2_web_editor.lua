@@ -563,6 +563,8 @@ end
 M.handlers.treasury_mod = function(data)
   local faction = require_arg(data, "faction", "string")
   local amount = require_arg(data, "amount", "number")
+  -- Rome II ignores a negative treasury_mod for every faction (tested in game, 2026-10-25).
+  if amount < 0 then error("Rome II cannot lower a treasury; only positive amounts are applied") end
   find_faction(faction)
   gi():treasury_mod(faction, amount)
   return ok({ faction = faction, treasury = safe(function() return find_faction(faction):treasury() end) })
