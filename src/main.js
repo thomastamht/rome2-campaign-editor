@@ -689,8 +689,10 @@ function openDialog(title, body, onConfirm) {
  * out a click (state.busy) and leaves a gap between polls instead of queueing forever.
  */
 const WATCH_MS = 250;
+const OWNERS_EVERY = 4;   // region owners are read on every 4th step (about once a second)
 let watchOn = false;
 let watchFailures = 0;
+let watchSteps = 0;
 
 function followCampaign() {
   if (watchOn || state.mode !== "live" || !state.bridge) return;
@@ -701,12 +703,36 @@ function followCampaign() {
 
 function stepWatch() {
   if (!watchOn || state.mode !== "live" || !state.bridge) { watchOn = false; return; }
-  const run = state.busy > 0 ? Promise.resolve(true) : refreshCharacters();
+  const run = state.busy > 0 ? Promise.resolve(true) : refreshLive();
   run.finally(() => {
     if (!watchOn) return;
     const gap = watchFailures ? Math.min(8000, WATCH_MS * 2 ** watchFailures) : WATCH_MS;
     setTimeout(stepWatch, gap);
   });
+}
+
+async function refreshLive() {
+  const ok = await refreshCharacters();
+  if (ok && ++watchSteps % OWNERS_EVERY === 0) await refreshOwners();
+  return ok;
+}
+
+/** Captures, transfers and turn-end changes; get_regions answers { region_key: owner_key }. */
+async function refreshOwners() {
+  try {
+    const owners = await state.bridge.request("get_regions");
+    if (!owners || typeof owners !== "object") return;
+    const changed = state.regions.filter(r => typeof owners[r.key] === "string" && owners[r.key] !== r.owner);
+    if (!changed.length) return;
+    for (const r of changed) {
+      r.owner = owners[r.key];
+      slotCache.delete(r.key);
+    }
+    feedMap();
+    if (state.selected?.kind === "region" && changed.some(r => r.key === state.selected.item.key)) renderDrawer();
+  } catch {
+    watchFailures += 1;
+  }
 }
 
 /** Positions while walking. A full record (no positions_only support) replaces the list. */
