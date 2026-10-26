@@ -1,9 +1,5 @@
-0.2.0
-- The patch now carries the DEI features and no longer replaces any game script; any load order
-- In a DEI campaign the unit list shows only DEI units, and regions' population (nobles, citizens, poor, foreigners) can be edited
-- Without this patch the editor stays vanilla, even in DEI
+0.1.0
+- First release
 
-0.2.0
-- 补丁现在只带 DEI 功能，不再替换任何游戏脚本，加载顺序无所谓
-- DEI 战役里兵种列表只显示 DEI 兵种，可修改地区人口（贵族、公民、贫民、外邦人）
-- 不装此补丁时，编辑器在 DEI 里也只有原版功能
+0.1.0
+- 首个版本
