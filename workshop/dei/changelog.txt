@@ -1,0 +1,11 @@
+0.1.0 — first public build
+- Separate Workshop item from the vanilla editor. Required when a DEI tweak replaces lua_scripts/episodicscripting.lua (DEI综合调整 does). Put this pack above that tweak
+- Same bridge as the vanilla pack, appended to that tweak's episodicscripting.lua
+- In a DEI campaign the page lists only DEI's own units and can edit a region's population (nobles, citizens, poor, foreigners)
+- Not needed for vanilla, for DEI without such a tweak, or for Diplomacy Reforged
+
+0.1.0 — 首个公开版本
+- 与原版编辑器分开的创意工坊条目。DEI 调整包替换了 lua_scripts/episodicscripting.lua 时才需要（DEI综合调整 会替换）。把本包放在那个调整包上面
+- 与原版包相同的桥接，接在那个调整包的 episodicscripting.lua 上
+- DEI 战役里，网页只列出 DEI 自己的兵种，并可修改一个地区的人口（贵族、公民、贫民、外邦人）
+- 原版、没有这种调整包的 DEI、Diplomacy Reforged 都不需要

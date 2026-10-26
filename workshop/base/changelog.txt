@@ -1,6 +1,6 @@
 0.1.0 — first public build
 - Lua bridge: request.json / response.json polling every 0.1 s in %USERPROFILE%\rome2_web_editor_mod (same protocol as the WARHAMMER II editor)
-- Hook via lua_scripts/episodicscripting.lua: one pack for vanilla, DLC campaigns and total conversions (DEI tested statically; in-game test pending)
+- Hook via lua_scripts/episodicscripting.lua. This pack is the vanilla editor. DEI is a separate Workshop item
 - Read: game info, factions, regions (with owner / province / public order), active characters with display + logical coordinates, force rosters, one-call snapshot
 - Write: treasury_mod, transfer_region_to_faction, set_public_order, replenish/zero action points, add_agent_experience (generals and agents), instant unit ranks via award_experience_level, create_force, force_declare_war / make_peace / trade / vassal, force_diplomacy, effect bundles, shroud, tax rate, development points, repair, rebellion, end turn
 - Web app: live map on the game's label-free HD terrain image with faction flags (settlement / army / navy / agent toggles), click-to-edit panels for generals and settlements, right-click army creation, searchable base-game unit picker, DIPLOMACY tab with the faction table and per-faction diplomacy (war / peace / trade / vassal, allow / block options), raw console

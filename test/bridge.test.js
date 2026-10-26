@@ -11,12 +11,17 @@ const { lua, lauxlib, lualib, to_luastring, to_jsstring } = fengari;
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const read = (p) => fs.readFileSync(path.join(root, p), "utf8");
 
-function newVm() {
+function newVm({ deiPatch = false } = {}) {
   const L = lauxlib.luaL_newstate();
   lualib.luaL_openlibs(L);
   const setGlobal = (name, value) => { lua.lua_pushstring(L, to_luastring(value)); lua.lua_setglobal(L, to_luastring(name)); };
   setGlobal("SRC_JSON", read("mod/lua_scripts/rome2_web_editor_json.lua"));
   setGlobal("SRC_BRIDGE", read("mod/lua_scripts/rome2_web_editor.lua"));
+  if (deiPatch) {
+    setGlobal("SRC_DEI", read("mod/lua_scripts/rome2_web_editor_dei.lua"));
+    lua.lua_pushboolean(L, true);
+    lua.lua_setglobal(L, to_luastring("WITH_DEI_PATCH"));
+  }
   const run = (code) => {
     if (lauxlib.luaL_dostring(L, to_luastring(code)) !== lua.LUA_OK) {
       throw new Error(`lua: ${to_jsstring(lua.lua_tostring(L, -1))}`);
@@ -351,8 +356,28 @@ test("per-slot repair sets health to 100 with the verified 3-argument call", () 
   vm.request({ type: "repair_building", request_id: 71, region: "rom_italia_latium", slot: 1 });
   assert.match(vm.response().result.error, /slot 1 has no building/);
 });
-test("DEI population: offered only with DEI's script, edited through its SetRegionPop", () => {
+const FAKE_DEI_POPULATION = `
+    local regions = { rom_italia_latium = { 100, 2000, 30000, 400 } }
+    package.loaded["lua_scripts.population"] = {
+      UIPopulation = { rom_italia_latium = { 100, 2000, 30000, 400 } },
+      GetRegionPop = function(region) return regions[region:name()] end,
+      SetRegionPop = function(name, up, mid, low, foreign) regions[name] = { up, mid, low, foreign } end,
+    }`;
+
+test("without the DEI patch a DEI campaign is treated as vanilla", () => {
   const vm = newVm();
+  vm.run(FAKE_DEI_POPULATION);
+  vm.run(`FIRE("FirstTickAfterWorldCreated", {})`);
+  vm.request({ type: "get_game_info", request_id: 90 });
+  const info = vm.response().result;
+  assert.equal(info.dei, false);
+  assert.equal(info.capabilities.set_region_population, undefined);
+  vm.request({ type: "get_region_population", request_id: 91, region: "rom_italia_latium" });
+  assert.match(vm.response().result.error, /unknown request type/);
+});
+
+test("DEI patch: population offered only with DEI's script, edited through its SetRegionPop", () => {
+  const vm = newVm({ deiPatch: true });
   vm.run(`FIRE("FirstTickAfterWorldCreated", {})`);
   vm.request({ type: "get_game_info", request_id: 80 });
   let info = vm.response().result;
@@ -361,13 +386,7 @@ test("DEI population: offered only with DEI's script, edited through its SetRegi
   vm.request({ type: "get_region_population", request_id: 81, region: "rom_italia_latium" });
   assert.match(vm.response().result.error, /DEI population script is not loaded/);
 
-  vm.run(`
-    local regions = { rom_italia_latium = { 100, 2000, 30000, 400 } }
-    package.loaded["lua_scripts.population"] = {
-      UIPopulation = { rom_italia_latium = { 100, 2000, 30000, 400 } },
-      GetRegionPop = function(region) return regions[region:name()] end,
-      SetRegionPop = function(name, up, mid, low, foreign) regions[name] = { up, mid, low, foreign } end,
-    }`);
+  vm.run(FAKE_DEI_POPULATION);
   vm.request({ type: "get_game_info", request_id: 82 });
   info = vm.response().result;
   assert.equal(info.dei, true);

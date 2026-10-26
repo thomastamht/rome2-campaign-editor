@@ -224,4 +224,5 @@ function RESPONSE() return FS["C:\\Users\\test\\rome2_web_editor_mod\\response.j
 
 package.preload["lua_scripts.rome2_web_editor_json"] = assert(load(SRC_JSON, "=rome2_web_editor_json.lua"))
 package.preload["lua_scripts.rome2_web_editor"] = assert(load(SRC_BRIDGE, "=rome2_web_editor.lua"))
+if WITH_DEI_PATCH then package.preload["lua_scripts.rome2_web_editor_dei"] = assert(load(SRC_DEI, "=rome2_web_editor_dei.lua")) end
 JSON = require("lua_scripts.rome2_web_editor_json")

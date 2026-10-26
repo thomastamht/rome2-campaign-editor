@@ -1,0 +1,25 @@
+[h1]Total War: Rome 2 Web Editor — DEI patch[/h1]
+Adds DEI features to [b]Total War: Rome 2 Web Editor[/b] (required).
+[list]
+[*] Unit list shows only DEI units
+[*] Edit region population: nobles, citizens, poor, foreigners
+[/list]
+Any load order.
+
+[hr][/hr]
+[h1]全面战争：罗马2 网页编辑器 — DEI 补丁[/h1]
+为 [b]全面战争：罗马2 网页编辑器[/b]（必需）加上 DEI 功能。
+[list]
+[*] 兵种列表只显示 DEI 兵种
+[*] 修改地区人口：贵族、公民、贫民、外邦人
+[/list]
+加载顺序无所谓。
+
+[hr][/hr]
+[h1]全面戰爭：羅馬2 網頁編輯器 — DEI 補丁[/h1]
+為 [b]全面戰爭：羅馬2 網頁編輯器[/b]（必需）加上 DEI 功能。
+[list]
+[*] 兵種列表只顯示 DEI 兵種
+[*] 修改地區人口：貴族、公民、平民、外邦人
+[/list]
+載入順序無所謂。

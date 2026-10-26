@@ -3,8 +3,8 @@
 //
 //   node tools/build-pack.mjs                       -> release/rome2_web_editor.pack
 //   node tools/build-pack.mjs --game "<Rome II dir>"
-//   node tools/build-pack.mjs --dei-patch ["<dei_mod.pack>"]
-//        -> additionally release/!rome2_web_editor_dei_patch.pack  (for a DEI pack that replaces episodicscripting.lua)
+//   node tools/build-pack.mjs --dei-patch
+//        -> additionally release/!rome2_web_editor_dei_patch.pack  (DEI features: population, DEI-only unit list)
 //   node tools/build-pack.mjs --scripting-overlay "<some_mod.pack>"
 //        -> additionally release/!rome2_web_editor_overlay_<mod>.pack  (fallback hook, see README)
 //
@@ -147,25 +147,18 @@ function buildBase(gameDir) {
   return out;
 }
 
-// A DEI pack in data\ that ships its own episodicscripting.lua replaces the base pack's hooked copy.
-// The patch is that mod's file plus the hook; it must sit above that mod in the launcher's load order.
-function deiEpisodicSource(gameDir, explicitPack) {
-  const dataDir = path.join(gameDir, "data");
-  const candidates = explicitPack ? [explicitPack] : fs.readdirSync(dataDir)
-    .filter(f => /dei/i.test(f) && f.endsWith(".pack") && !f.includes(PACK_NAME))
-    .sort()
-    .map(f => path.join(dataDir, f));
-  for (const packPath of candidates) {
-    const entry = readPackIndex(packPath).entries.find(e => e.path.toLowerCase() === EPISODIC_PATH.toLowerCase());
-    if (entry) return { data: readEntry(packPath, entry), source: packPath };
-  }
-  throw new Error(`no DEI pack in ${dataDir} replaces ${EPISODIC_PATH}; the base pack alone hooks DEI`);
-}
+// The DEI patch adds one module the base bridge requires when present; it replaces no game file,
+// so it works in any load order next to the base pack.
+const DEI_FILE = "lua_scripts\\rome2_web_editor_dei.lua";
 
-function buildDeiPatch(gameDir, explicitPack) {
-  const episodic = hookedEpisodic(deiEpisodicSource(gameDir, explicitPack));
-  console.log(`dei patch: ${EPISODIC_PATH} taken from ${episodic.source}`);
-  return writePack(`!${PACK_NAME}_dei_patch`, [{ path: EPISODIC_PATH, data: episodic.data }, ...bridgeFiles()]);
+function buildDeiPatch() {
+  const abs = path.join(root, "mod", DEI_FILE);
+  if (!fs.existsSync(abs)) throw new Error(`missing ${abs}`);
+  const outName = `!${PACK_NAME}_dei_patch`;
+  const out = writePack(outName, [{ path: DEI_FILE, data: fs.readFileSync(abs) }]);
+  const preview = path.join(root, "workshop", "dei", `${outName}.png`);
+  if (fs.existsSync(preview)) fs.copyFileSync(preview, path.join(root, "release", `${outName}.png`));
+  return out;
 }
 
 // Fallback for mods that ship their own lua_scripts\episodicscripting.lua: hook every
@@ -192,10 +185,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const gameDir = findGameDir();
     console.log(`game: ${gameDir}`);
     buildBase(gameDir);
-    if (args.includes("--dei-patch")) {
-      const deiPack = opt("--dei-patch");
-      buildDeiPatch(gameDir, deiPack && !deiPack.startsWith("--") ? deiPack : undefined);
-    }
+    if (args.includes("--dei-patch")) buildDeiPatch();
     if (opt("--scripting-overlay")) buildScriptingOverlay(opt("--scripting-overlay"));
   } catch (err) {
     console.error(`build failed: ${err.message}`);
