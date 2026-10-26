@@ -184,7 +184,6 @@ GI = {
   add_time_trigger = function(_, id, t) table.insert(TIMERS, { id = id, t = t }) end,
   treasury_mod = record("treasury_mod", function(f, amt) FACTIONS[f].treasury_value = FACTIONS[f].treasury_value + amt end),
   transfer_region_to_faction = record("transfer_region_to_faction", function(r, f) REGIONS[r].owner = f end),
-  trigger_custom_dilemma = record("trigger_custom_dilemma"),
   create_force = record("create_force"),
   kill_character = record("kill_character"),
   replenish_action_points = record("replenish_action_points"),

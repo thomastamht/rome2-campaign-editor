@@ -56,7 +56,6 @@ M.capabilities = {
   get_settlement_slots = "verified", repair_building = "verified",
   relocate_force = "composed", relocate_status = "verified",
   move_force = "engine", move_status = "verified",
-  debit_treasury = "experimental",
 }
 
 -- Reported only while DEI's population script is loaded (see dei_population).
@@ -577,19 +576,6 @@ M.handlers.treasury_mod = function(data)
   find_faction(faction)
   gi():treasury_mod(faction, amount)
   return ok({ faction = faction, treasury = safe(function() return find_faction(faction):treasury() end) })
-end
-
--- The only debit Rome II scripts can make is a "money -N" dilemma payload (DEI changeCapital
--- uses it). Both choices carry the payload, so the money goes whichever one is picked.
--- The engine resolves the dilemma later, so the returned treasury is the value before it.
-M.handlers.debit_treasury = function(data)
-  local faction = require_arg(data, "faction", "string")
-  local amount = math.floor(require_arg(data, "amount", "number"))
-  if amount <= 0 then error("amount must be a positive number") end
-  local f = find_faction(faction)
-  local payload = "payload { money -" .. amount .. "; }"
-  gi():trigger_custom_dilemma(faction, "move_capital_rome", payload, payload, true)
-  return ok({ faction = faction, amount = amount, treasury = safe(function() return f:treasury() end) })
 end
 
 M.handlers.transfer_region_to_faction = function(data)

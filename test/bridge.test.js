@@ -120,19 +120,6 @@ test("treasury_mod refuses a negative amount, which Rome II silently ignores", (
   assert.equal(vm.evalJson(`{ n = #CALLS }`).n, 0);
 });
 
-test("debit_treasury puts the same money payload on both dilemma choices", () => {
-  const vm = newVm();
-  vm.run(`FIRE("FirstTickAfterWorldCreated", {})`);
-  vm.request({ type: "debit_treasury", request_id: 3, faction: "rom_carthage", amount: 1200.7 });
-  assert.equal(vm.response().result.ok, true);
-  const payload = "payload { money -1200; }";
-  assert.deepEqual(vm.evalJson(`CALLS[1]`), {
-    name: "trigger_custom_dilemma", args: ["rom_carthage", "move_capital_rome", payload, payload, true],
-  });
-  vm.request({ type: "debit_treasury", request_id: 4, faction: "rom_carthage", amount: 0 });
-  assert.match(vm.response().result.error, /positive/);
-});
-
 test("unknown faction / unknown type / partial JSON are reported or skipped without crashing", () => {
   const vm = newVm();
   vm.run(`FIRE("FirstTickAfterWorldCreated", {})`);
