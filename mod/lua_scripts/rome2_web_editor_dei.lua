@@ -1,8 +1,5 @@
 -------------------------------------------------------------------------------
 --  Rome II Web Campaign Editor - DEI extension
---
---  Shipped only in !rome2_web_editor_dei_patch.pack. The bridge requires it when
---  present; without it the editor behaves as vanilla even in a DEI campaign.
 -------------------------------------------------------------------------------
 
 local DEI = {}

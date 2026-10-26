@@ -147,8 +147,6 @@ function buildBase(gameDir) {
   return out;
 }
 
-// The DEI patch adds one module the base bridge requires when present; it replaces no game file,
-// so it works in any load order next to the base pack.
 const DEI_FILE = "lua_scripts\\rome2_web_editor_dei.lua";
 
 function buildDeiPatch() {

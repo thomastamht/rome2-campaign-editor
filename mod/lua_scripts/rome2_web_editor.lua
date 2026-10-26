@@ -327,8 +327,6 @@ end
 -- read handlers
 -------------------------------------------------------------------------------
 
--- lua_scripts\rome2_web_editor_dei.lua ships only in the DEI patch pack. Without it the editor is
--- vanilla-only, even in a DEI campaign.
 local function load_dei_extension()
   local found, ext = pcall(require, "lua_scripts.rome2_web_editor_dei")
   if not found or type(ext) ~= "table" then return nil end
