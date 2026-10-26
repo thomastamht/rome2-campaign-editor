@@ -6,11 +6,13 @@ Edit your running campaign from a web page.
 [*] View a live campaign map
 [*] Create armies
 [*] Add money to the treasury
-[*] Force diplomacy
+[*] Force war, peace, trade or vassalage
 [*] Repair buildings
+[*] Change region owner
 [*] Change public order
 [*] Add population surplus
 [*] Trigger rebellions
+[*] Add experience to generals, agents and units
 [*] Change action points
 [/list]
 
@@ -22,6 +24,7 @@ Edit your running campaign from a web page.
 [/olist]
 
 [h2]Compatibility[/h2]
+Tested on Windows only.
 Can be added mid-save.
 Conflicts only with mods that replace lua_scripts/episodicscripting.lua.
 For DEI features, also subscribe to the [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3827602931]DEI patch[/url].
@@ -39,11 +42,13 @@ Questions or bugs? Leave a comment.
 [*] 查看实时战略地图
 [*] 创建军队
 [*] 增加国库
-[*] 强制外交
+[*] 强制宣战、和平、贸易或附庸
 [*] 修复建筑
+[*] 更改地区归属
 [*] 修改地区治安
 [*] 增加人口盈余
 [*] 造成叛乱
+[*] 增加将领、特工和士兵经验
 [*] 更改行动力
 [/list]
 
@@ -55,6 +60,7 @@ Questions or bugs? Leave a comment.
 [/olist]
 
 [h2]兼容[/h2]
+只在 Windows 上测试过。
 可中途加入存档。
 只与替换 lua_scripts/episodicscripting.lua 的 Mod 冲突。
 DEI 功能需另订 [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3827602931]DEI 补丁[/url]。
@@ -72,11 +78,13 @@ AI vibe coding 制作。参考 IMRZ 的战锤2 [url=https://steamcommunity.com/s
 [*] 查看即時戰略地圖
 [*] 建立軍隊
 [*] 增加國庫
-[*] 強制外交
+[*] 強制宣戰、和平、貿易或附庸
 [*] 修復建築
+[*] 更改地區歸屬
 [*] 修改地區治安
 [*] 增加人口盈餘
 [*] 造成叛亂
+[*] 增加將領、特工和士兵經驗
 [*] 更改行動力
 [/list]
 
@@ -88,6 +96,7 @@ AI vibe coding 制作。参考 IMRZ 的战锤2 [url=https://steamcommunity.com/s
 [/olist]
 
 [h2]相容[/h2]
+只在 Windows 上測試過。
 可中途加入存檔。
 只與替換 lua_scripts/episodicscripting.lua 的 Mod 衝突。
 DEI 功能需另訂 [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3827602931]DEI 補丁[/url]。
