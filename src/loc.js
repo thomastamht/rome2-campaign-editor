@@ -7,6 +7,7 @@ const tables = new Map();   // data lang -> { key: text }
 let active = {};
 let fallback = {};
 let units = {};             // key -> { en, zh, game }
+let agentTable = null;     // public/loc/agents.json: faction/subculture titles
 let uiLang = "en";
 
 const dataLangOf = (lang) => (lang === "tw" ? "zh" : lang);
@@ -28,6 +29,7 @@ export async function loadLoc(lang) {
   const dataLang = dataLangOf(lang);
   for (const l of [dataLang, "en"]) if (!tables.has(l)) tables.set(l, await fetchJson(`${l}.json`));
   if (!Object.keys(units).length) units = await fetchJson("units.json");
+  if (!agentTable) agentTable = await fetchJson("agents.json");
   active = tables.get(dataLang) ?? {};
   fallback = tables.get("en") ?? {};
   buildingNames.clear();
@@ -68,6 +70,26 @@ export function personName(value) {
 }
 
 const TEST_UNIT = /^test_|placeholder|dummy/i;
+
+/**
+ * Faction title for an agent job (spy, dignitary, champion).
+ * Names are [male] or [male, female] when the faction uses two.
+ * male true/false picks one; omit it to show both.
+ */
+export function agentDisplayName(table, type, { faction, subculture, male, lang } = {}) {
+  const row = table?.faction?.[faction]?.[type] ?? table?.subculture?.[subculture]?.[type];
+  const names = row?.[lang]?.length ? row[lang] : row?.en;
+  if (!names?.length) return undefined;
+  if (names.length > 1 && male !== true && male !== false) return names.join(" / ");
+  if (male === false) return names[1] ?? names[0];
+  return names[0];
+}
+
+/** Title for the loaded language. Undefined when this faction has no override. */
+export function agentTitle(type, spec = {}) {
+  const lang = uiLang === "tw" ? "tw" : dataLangOf(uiLang);
+  return agentDisplayName(agentTable, type, { ...spec, lang });
+}
 
 /** Unit catalogue for pickers: [{ key, name, game }] sorted by display name. only: "game" | "dei" | null. */
 export function unitCatalogue({ only = "game" } = {}) {

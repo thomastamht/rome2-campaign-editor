@@ -87,6 +87,7 @@ local function make_char(spec)
   c.in_settlement = function() return spec.in_settlement == true end
   c.is_embedded_in_military_force = function() return false end
   c.is_faction_leader = function() return spec.leader == true end
+  c.is_male = function() return spec.male ~= false end
   c.age = function() return 40 end
   c.region = function() return REGIONS[spec.region] end
   c.has_military_force = function() return spec.units ~= nil end
@@ -185,20 +186,15 @@ GI = {
   treasury_mod = record("treasury_mod", function(f, amt) FACTIONS[f].treasury_value = FACTIONS[f].treasury_value + amt end),
   transfer_region_to_faction = record("transfer_region_to_faction", function(r, f) REGIONS[r].owner = f end),
   create_force = record("create_force"),
-  kill_character = record("kill_character"),
+  create_agent = record("create_agent"),
   replenish_action_points = record("replenish_action_points"),
   zero_action_points = record("zero_action_points"),
   force_declare_war = record("force_declare_war"),
   force_make_peace = record("force_make_peace"),
-  enable_movement_for_character = record("enable_movement_for_character"),
-  show_shroud = record("show_shroud"),
   make_region_visible_in_shroud = record("make_region_visible_in_shroud"),
-  scroll_camera = record("scroll_camera"),
   award_experience_level = record("award_experience_level"),
   add_agent_experience = record("add_agent_experience"),
-  apply_effect_bundle_to_characters_force = record("apply_effect_bundle_to_characters_force"),
   instant_set_building_health_percent = record("instant_set_building_health_percent"),  -- Mock accepts the (region_key, building_key) form only.
-  -- move_to deliberately absent: Rome II's GAME table does not list it.
 }
 
 SCRIPTING = {
@@ -213,7 +209,7 @@ function FIRE(event, context)
   for _, entry in ipairs(EVENTS[event] or {}) do entry.fn(context) end
 end
 
-function POLL() FIRE("TimeTrigger", { string = "rome2_web_editor_poll" }) end
+function POLL() FIRE("TimeTrigger", { string = ROME2_WEB_EDITOR.poll_id }) end
 
 function REQUEST(json_text)
   FS["C:\\Users\\test\\rome2_web_editor_mod\\request.json"] = json_text

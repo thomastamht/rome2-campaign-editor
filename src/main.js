@@ -5,7 +5,7 @@ import { MapView, coordinateModel, factionColor, inferRegionPositions, nearest }
 import { LANGUAGES, createI18n, detectLanguage } from "./strings.js";
 import { RegionLookup } from "./regionLookup.js";
 import { flagImage, flagInfo, loadFlagIndex, setFlagReadyCallback } from "./flags.js";
-import { buildingDisplayName, cultureDisplayName, factionDisplayName, loadLoc, personName, provinceDisplayName, regionDisplayName, subcultureDisplayName, unitCatalogue } from "./loc.js";
+import { agentTitle, buildingDisplayName, cultureDisplayName, factionDisplayName, loadLoc, personName, provinceDisplayName, regionDisplayName, subcultureDisplayName, unitCatalogue } from "./loc.js";
 
 const i18n = createI18n(localStorage.getItem("r2we.lang") || detectLanguage(navigator.language ?? ""));
 const t = i18n.t;
@@ -29,7 +29,7 @@ const state = {
   showNavies: true,
   showAgents: true,
   search: "",
-  factionSort: null,      // { key: "regions" | "treasury", desc } for the diplomacy table
+  factionSort: null,      // { key: "regions" | "forces" | "treasury", desc } for the diplomacy table
   log: [],
   busy: 0,
 };
@@ -37,7 +37,11 @@ const state = {
 const root = document.querySelector("#root");
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fmt = (n) => (Number.isFinite(n) ? Number(n).toLocaleString() : "—");
-const factionName = (key) => state.factions.find(f => f.key === key)?.name ?? factionDisplayName(key) ?? flagInfo(key)?.name ?? key ?? "—";
+const factionLabel = (f) => `${f.name || f.key}${f.is_dead ? " ✝" : ""}`;
+const factionName = (key) => {
+  const f = state.factions.find(f => f.key === key);
+  return f ? factionLabel(f) : factionDisplayName(key) ?? flagInfo(key)?.name ?? key ?? "—";
+};
 const regionName = (key) => state.regions.find(r => r.key === key)?.name ?? regionDisplayName(key) ?? key ?? "—";
 const charName = (c) => [c.forename, c.surname].filter(Boolean).join(" ") || `cqi ${c.cqi}`;
 
@@ -66,8 +70,18 @@ function localiseData() {
   }
 }
 
-/** Localised character type ("general", "spy", …). */
-const typeLabel = (c) => t(`types.${c.type}`) === `types.${c.type}` ? (c.type ?? "—") : t(`types.${c.type}`);
+const SPAWN_AGENT_TYPES = ["spy", "dignitary", "champion"];
+
+/** Localised character type. Agents use their faction's own title for the same job. */
+const typeLabel = (c) => {
+  if (c && SPAWN_AGENT_TYPES.includes(c.type)) {
+    const faction = state.factions.find(f => f.key === c.faction);
+    const titled = agentTitle(c.type, { faction: c.faction, subculture: faction?.subculture, male: c.male });
+    if (titled) return titled;
+  }
+  const generic = t(`types.${c.type}`);
+  return generic === `types.${c.type}` ? (c.type ?? "—") : generic;
+};
 /** A request type is usable when the connected bridge lists a handler for it. */
 const can = (type) => Boolean(state.info?.capabilities?.[type]);
 
@@ -92,10 +106,14 @@ function shell() {
         <label class="toggle"><input type="checkbox" id="showArmies" ${state.showArmies ? "checked" : ""}> ${t("showArmies")}</label>
         <label class="toggle"><input type="checkbox" id="showNavies" ${state.showNavies ? "checked" : ""}> ${t("showNavies")}</label>
         <label class="toggle"><input type="checkbox" id="showAgents" ${state.showAgents ? "checked" : ""}> ${t("showAgents")}</label>
-        <select id="mapFactionFilter"></select>
+        <div id="mapFactionPick"></div>
         <button id="resetView" class="ghost">${t("resetView")}</button>
       </div>
       <div id="tooltip" class="tooltip" hidden></div>
+      <div id="contextMenu" class="context-menu" hidden>
+        <button type="button" data-spawn="unit"><i>⚑</i><span>${t("spawnUnit")}</span></button>
+        <button type="button" data-spawn="agent"><i>♟</i><span>${t("spawnAgent")}</span></button>
+      </div>
       <aside id="drawer" class="drawer" hidden></aside>
       <section id="sheet" class="sheet" hidden></section>
       <p class="hint">${t("mapHint")}</p>
@@ -108,8 +126,8 @@ function shell() {
   for (const id of ["showSettlements", "showArmies", "showNavies", "showAgents"]) {
     document.querySelector(`#${id}`).onchange = e => { state[id] = e.target.checked; feedMap(); };
   }
-  document.querySelector("#mapFactionFilter").onchange = e => { state.factionFilter = e.target.value; feedMap(); };
   document.querySelector("#resetView").onclick = () => map?.resetView();
+  bindContextMenu();
   mountMap();
   updateHeader();
 }
@@ -120,8 +138,7 @@ function updateHeader() {
   document.querySelector("#campaignInfo").textContent = info
     ? `${factionName(info.player_faction)} · ${t("turn")} ${info.turn ?? "?"}`
     : "";
-  const sel = document.querySelector("#mapFactionFilter");
-  sel.innerHTML = `<option value="all">${t("filterAll")}</option>${state.factions.filter(f => !f.is_dead).map(f => `<option value="${esc(f.key)}" ${state.factionFilter === f.key ? "selected" : ""}>${esc(f.name)}</option>`).join("")}`;
+  fillMapFactionPick();
   document.querySelectorAll("[data-sheet]").forEach(b => b.classList.toggle("active", b.dataset.sheet === state.sheet));
 }
 
@@ -137,7 +154,7 @@ function mountMap() {
     onHover: (hit, e) => tooltip(hit, e),
     onSelect: (hit) => onMarkerClick(hit),
     onEmptyClick: () => onEmptyClick(),
-    onContextMenu: (world, hit) => createForceDialog(world, hit),
+    onContextMenu: (world, hit, event) => showContextMenu(world, hit, event),
   });
   setFlagReadyCallback(() => map?.draw());
   feedMap();
@@ -197,6 +214,61 @@ function onEmptyClick() {
   renderDrawer();
   feedMap();
 }
+
+// Right-click on the map opens a desktop-style list. The chosen action uses the logical tile under the cursor.
+let contextTarget = null;
+
+function showContextMenu(world, hit, event) {
+  const menu = document.querySelector("#contextMenu");
+  if (!menu) return;
+  contextTarget = { world, hit };
+  menu.querySelector('[data-spawn="unit"]').disabled = !can("create_force");
+  menu.querySelector('[data-spawn="agent"]').disabled = !can("create_agent");
+  menu.hidden = false;
+  const pad = 4;
+  let x = event.clientX;
+  let y = event.clientY;
+  menu.style.left = `${x}px`;
+  menu.style.top = `${y}px`;
+  const rect = menu.getBoundingClientRect();
+  if (rect.right > window.innerWidth - pad) x = Math.max(pad, window.innerWidth - rect.width - pad);
+  if (rect.bottom > window.innerHeight - pad) y = Math.max(pad, window.innerHeight - rect.height - pad);
+  menu.style.left = `${x}px`;
+  menu.style.top = `${y}px`;
+}
+
+function hideContextMenu() {
+  const menu = document.querySelector("#contextMenu");
+  if (menu) menu.hidden = true;
+  contextTarget = null;
+}
+
+function bindContextMenu() {
+  const menu = document.querySelector("#contextMenu");
+  menu.addEventListener("contextmenu", (e) => e.preventDefault());
+  menu.addEventListener("click", (e) => {
+    const button = e.target.closest("[data-spawn]");
+    if (!button || button.disabled) return;
+    const target = contextTarget;
+    hideContextMenu();
+    if (!target) return;
+    if (button.dataset.spawn === "unit") createForceDialog(target.world, target.hit);
+    else createAgentDialog(target.world, target.hit);
+  });
+}
+
+document.addEventListener("pointerdown", (e) => {
+  const menu = document.querySelector("#contextMenu");
+  if (!menu || menu.hidden || menu.contains(e.target)) return;
+  hideContextMenu();
+}, true);
+document.addEventListener("keydown", (e) => {
+  const menu = document.querySelector("#contextMenu");
+  if (!menu || menu.hidden || e.key !== "Escape") return;
+  e.preventDefault();
+  hideContextMenu();
+});
+document.addEventListener("wheel", () => hideContextMenu(), { capture: true, passive: true });
 
 // Only the Grand Campaign (main_rome) is supported. The map is plotted in LOGICAL tiles, like the WH2
 // editor: the terrain image (public/maps, from the game's packs) spans the whole logical grid.
@@ -280,12 +352,12 @@ async function rememberDirectory(dir) {
 }
 
 async function useDirectory(dir, { quiet = false } = {}) {
-  const bridge = new FileBridge(dir);
+  const bridge = new FileBridge(dir, { hints: { timeout: () => t("gameNotResponding"), stopped: () => t("gameStopped") } });
   const ready = await bridge.isAlive();
   state.bridge = bridge;
   state.mode = "live";
   state.selected = null;
-  if (!quiet || !ready) toast(ready ? t("connected") : t("notReady"));
+  if (!quiet || !ready) toast(ready ? t("connected") : bridge.stopped ? t("gameStopped") : t("notReady"));
   updateHeader();
   await loadAll();
   followCampaign();
@@ -322,23 +394,10 @@ function loadAll() {
   return loading;
 }
 
-async function fetchSnapshot() {
-  // One request when the bridge supports it; the four-call fallback keeps older packs working.
-  const snap = await state.bridge.request("get_snapshot");
-  if (snap && snap.ok !== false && snap.info) return snap;
-  const info = await state.bridge.request("get_game_info");
-  const [factions, regions, characters] = await Promise.all([
-    state.bridge.request("get_factions"),
-    state.bridge.request("get_regions_detailed"),
-    state.bridge.request("get_active_characters"),
-  ]);
-  return { info, factions, regions, characters };
-}
-
 async function loadAllNow() {
   busy(1);
   try {
-    const { info, factions, regions, characters } = await fetchSnapshot();
+    const { info, factions, regions, characters } = assertOk(await state.bridge.request("get_snapshot"), "get_snapshot");
     slotCache.clear();
     state.info = info;
     state.factions = Array.isArray(factions) ? factions : [];
@@ -428,8 +487,155 @@ function flagImg(key, size = 28) {
   return info ? `<img class="flag" src="${import.meta.env.BASE_URL}flags/${encodeURIComponent(info.flag)}/mon_64.png" width="${size}" height="${size}" alt="">` : `<i class="dot" style="background:${factionColor(key)}"></i>`;
 }
 
-function factionSelect(id, value, extra = "") {
-  return `<select id="${id}" ${extra}>${state.factions.filter(f => !f.is_dead).map(f => `<option value="${esc(f.key)}" ${f.key === value ? "selected" : ""}>${esc(f.name)}</option>`).join("")}</select>`;
+function factionChoices({ includeAll = false, exclude = "", includeDead = false } = {}) {
+  const rows = includeAll ? [{ key: "all", name: t("filterAll") }] : [];
+  const dead = [];
+  for (const f of state.factions) {
+    if (f.key === exclude) continue;
+    if (f.is_dead && !includeDead) continue;
+    const row = { key: f.key, name: factionLabel(f) };
+    (f.is_dead ? dead : rows).push(row);
+  }
+  return rows.concat(dead);
+}
+
+/** Searchable faction field. The element with `id` is a hidden input, so existing `.value` reads keep working. */
+function factionPicker(id, value, choices) {
+  const current = choices.find(c => c.key === value) ?? choices[0] ?? { key: "", name: "" };
+  const options = choices.map(c => `<button type="button" class="pick-opt" data-key="${esc(c.key)}">${esc(c.name)}</button>`).join("");
+  return `<div class="pick"><input id="${id}" class="pick-value" type="hidden" value="${esc(current.key)}"><input class="pick-search" placeholder="${esc(t("search"))}" value="${esc(current.name)}" autocomplete="off" spellcheck="false"><div class="pick-list" hidden>${options}</div></div>`;
+}
+
+function factionSelect(id, value, { includeDead = false } = {}) {
+  return factionPicker(id, value, factionChoices({ includeDead }));
+}
+
+function fillMapFactionPick() {
+  const host = document.querySelector("#mapFactionPick");
+  if (!host || host.querySelector(".pick-search") === document.activeElement) return;
+  const choices = factionChoices({ includeAll: true, includeDead: true });
+  if (!choices.some(c => c.key === state.factionFilter)) state.factionFilter = "all";
+  host.innerHTML = factionPicker("mapFactionFilter", state.factionFilter, choices);
+  bindPickers(host);
+  host.querySelector("#mapFactionFilter").addEventListener("change", (e) => {
+    state.factionFilter = e.target.value;
+    feedMap();
+  });
+}
+
+function bindPickers(scope) {
+  scope.querySelectorAll(".pick").forEach(pick => {
+    if (pick.dataset.bound) return;
+    pick.dataset.bound = "1";
+    const search = pick.querySelector(".pick-search");
+    const hidden = pick.querySelector(".pick-value");
+    const list = pick.querySelector(".pick-list");
+    const options = () => [...list.querySelectorAll(".pick-opt")];
+    const visible = () => options().filter(o => !o.hidden);
+    // The list is moved to document.body while open. map-tools uses backdrop-filter,
+    // which would make a nested position:fixed list position against that bar instead of the viewport.
+    // A <dialog> paints in the top layer, above every z-index, so a list parked on body
+    // sits behind the dialog and cannot be clicked. Leave that one inside the dialog.
+    const parkOnBody = !pick.closest("dialog");
+    const place = () => {
+      if (parkOnBody && list.parentElement !== document.body) document.body.appendChild(list);
+      const r = search.getBoundingClientRect();
+      const below = window.innerHeight - r.bottom;
+      list.style.left = `${r.left}px`;
+      list.style.width = `${Math.max(r.width, 220)}px`;
+      if (below < 180 && r.top > below) {
+        list.style.top = "auto";
+        list.style.bottom = `${window.innerHeight - r.top + 2}px`;
+        list.style.maxHeight = `${Math.max(80, Math.min(240, r.top - 8))}px`;
+      } else {
+        list.style.bottom = "auto";
+        list.style.top = `${r.bottom + 2}px`;
+        list.style.maxHeight = `${Math.max(80, Math.min(240, below - 8))}px`;
+      }
+    };
+    const unpark = () => {
+      if (!pick.isConnected) { list.remove(); return; }
+      if (list.parentElement !== pick) pick.appendChild(list);
+    };
+    let tracking = false;
+    const onMove = () => {
+      if (!pick.isConnected) { list.remove(); stop(); return; }
+      if (list.hidden) stop();
+      else place();
+    };
+    const start = () => {
+      if (tracking) return;
+      tracking = true;
+      window.addEventListener("scroll", onMove, true);
+      window.addEventListener("resize", onMove);
+    };
+    const stop = () => {
+      unpark();
+      if (!tracking) return;
+      tracking = false;
+      window.removeEventListener("scroll", onMove, true);
+      window.removeEventListener("resize", onMove);
+    };
+    const show = (query) => {
+      const q = query.trim().toLowerCase();
+      for (const opt of options()) {
+        const name = opt.textContent.toLowerCase();
+        const key = (opt.dataset.key ?? "").toLowerCase();
+        opt.hidden = q !== "" && !name.includes(q) && !key.includes(q);
+        opt.classList.remove("active");
+      }
+      const rows = visible();
+      list.hidden = rows.length === 0;
+      if (list.hidden) stop();
+      else { place(); start(); }
+    };
+    const restore = () => {
+      const chosen = options().find(o => o.dataset.key === hidden.value);
+      if (chosen) search.value = chosen.textContent;
+      list.hidden = true;
+      stop();
+    };
+    const choose = (opt) => {
+      if (!opt) return;
+      hidden.value = opt.dataset.key;
+      search.value = opt.textContent;
+      list.hidden = true;
+      stop();
+      hidden.dispatchEvent(new Event("change", { bubbles: true }));
+    };
+    const openAll = () => show("");
+    // A click focuses the field, but some clicks land on an already-focused field and do not fire focus again.
+    search.addEventListener("pointerdown", openAll);
+    search.addEventListener("focus", () => { search.select(); openAll(); });
+    search.addEventListener("input", () => show(search.value));
+    search.addEventListener("keydown", (e) => {
+      const rows = visible();
+      const i = rows.findIndex(o => o.classList.contains("active"));
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        e.preventDefault();
+        const next = e.key === "ArrowDown" ? rows[Math.min(rows.length - 1, i + 1)] : rows[Math.max(0, i - 1)];
+        rows.forEach(o => o.classList.remove("active"));
+        next?.classList.add("active");
+        next?.scrollIntoView({ block: "nearest" });
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        const current = rows.find(o => o.dataset.key === hidden.value);
+        choose(rows.find(o => o.classList.contains("active")) ?? current ?? rows[0]);
+      } else if (e.key === "Escape") {
+        restore();
+        search.blur();
+      }
+    });
+    list.addEventListener("mousedown", (e) => {
+      const opt = e.target.closest(".pick-opt");
+      if (!opt) return;
+      e.preventDefault();
+      choose(opt);
+    });
+    search.addEventListener("blur", () => {
+      setTimeout(() => { if (!pick.contains(document.activeElement)) restore(); }, 0);
+    });
+  });
 }
 
 function regionSelect(id, value) {
@@ -540,10 +746,10 @@ async function loadSlots(regionKey) {
 function factionDrawer(f) {
   const html = `
     <div class="drawer-body">
-      <div class="identity">${flagImg(f.key, 40)}<div><b>${esc(f.name)}</b><small>${esc(f.culture_name)}</small></div></div>
+      <div class="identity">${flagImg(f.key, 40)}<div><b>${esc(factionLabel(f))}</b><small>${esc(f.culture_name)}</small></div></div>
       ${field(t("culture"), `${esc(f.culture_name)}${f.subculture_name && f.subculture_name !== f.culture_name ? ` · ${esc(f.subculture_name)}` : ""}`)}
       ${field(t("treasury"), fmt(f.treasury))}
-      ${field(t("regionsCol"), `${f.regions} · ${t("forcesCol")} ${f.forces} · ${f.is_human ? t("human") : "AI"}${f.is_dead ? " · ✝" : ""}`)}
+      ${field(t("regionsCol"), `${f.regions} · ${t("forcesCol")} ${f.forces} · ${f.is_human ? t("human") : "AI"}`)}
       <h4>${t("nationalTreasury")}</h4>
       <div class="action-list">
         <div class="action-row"><input type="number" id="setTo" value="${esc(f.treasury ?? 0)}" step="500">${action("=", t("setTo"), "treasury_mod", 'data-treasury="set"')}</div>
@@ -564,7 +770,7 @@ function diplomacySection(f) {
   return `
       <h4>${t("diplomacy")}</h4>
       <div class="action-list">
-        <div class="action-row"><small>${t("factionB")}</small><select id="diploB">${others.map(x => `<option value="${esc(x.key)}" ${x.key === b ? "selected" : ""}>${esc(x.name)}</option>`).join("")}</select></div>
+        <div class="action-row"><small>${t("factionB")}</small>${factionPicker("diploB", b, factionChoices({ exclude: f.key }))}</div>
         ${action("⚔", t("declareWar"), "force_declare_war", 'data-diplo="force_declare_war"')}
         ${action("☮", t("makePeace"), "force_make_peace", 'data-diplo="force_make_peace"')}
         ${action("⚖", t("trade"), "force_make_trade_agreement", 'data-diplo="force_make_trade_agreement"')}
@@ -591,13 +797,14 @@ function factionsView() {
   const rows = state.factions.filter(f => `${f.name} ${f.culture_name} ${f.subculture_name}`.toLowerCase().includes(q));
   const sort = state.factionSort;
   if (sort) rows.sort((a, b) => ((Number(b[sort.key]) || 0) - (Number(a[sort.key]) || 0)) * (sort.desc ? 1 : -1));
+  rows.sort((a, b) => Number(Boolean(a.is_dead)) - Number(Boolean(b.is_dead)));
   const sortable = (key, label) => `<button class="th-sort" data-sort="${key}">${label}${sort?.key === key ? (sort.desc ? " ▼" : " ▲") : ""}</button>`;
   return `
     <div class="toolbar"><input id="search" placeholder="${t("search")}" value="${esc(state.search)}"><span>${rows.length}</span></div>
     <div class="table">
-      <div class="thead cols-f"><span>${t("faction")}</span><span>${t("culture")}</span>${sortable("regions", t("regionsCol"))}<span>${t("forcesCol")}</span>${sortable("treasury", t("treasury"))}<span>${t("human")}</span></div>
-      ${rows.map(f => `<button class="tr cols-f" data-select-faction="${esc(f.key)}">
-        <span>${flagImg(f.key, 20)}${esc(f.name)}</span><span>${esc(f.culture_name)}</span><span>${f.regions}</span><span>${f.forces}</span><span>${fmt(f.treasury)}</span><span>${f.is_human ? "●" : ""}${f.is_dead ? " ✝" : ""}</span></button>`).join("")}
+      <div class="thead cols-f"><span>${t("faction")}</span><span>${t("culture")}</span>${sortable("regions", t("regionsCol"))}${sortable("forces", t("forcesCol"))}${sortable("treasury", t("treasury"))}<span>${t("human")}</span></div>
+      ${rows.map(f => `<button class="tr cols-f${f.is_dead ? " dead" : ""}" data-select-faction="${esc(f.key)}">
+        <span>${flagImg(f.key, 20)}${esc(factionLabel(f))}</span><span>${esc(f.culture_name)}</span><span>${f.regions}</span><span>${f.forces}</span><span>${fmt(f.treasury)}</span><span>${f.is_human ? "●" : ""}</span></button>`).join("")}
     </div>`;
 }
 
@@ -610,6 +817,10 @@ function consoleView() {
         <div class="row"><label>${t("rawType")} <input id="rawType" value="heartbeat" list="rawTypes"></label><datalist id="rawTypes">${caps.map(k => `<option value="${k}">`).join("")}</datalist></div>
         <label>${t("rawArgs")} <textarea id="rawArgs" rows="4">{}</textarea></label>
         <div class="row"><button id="rawSend">${t("send")}</button></div>
+        <h3>${t("quickActions")}</h3>
+        <div class="action-list">
+          ${action("◎", t("revealAll"), "reveal_all_regions", `data-norefresh="1"`)}
+        </div>
         <h3>${t("installTitle")}</h3>
         <ol class="install">
           <li>${t("install1")} <code>powershell.exe mkdir $env:USERPROFILE\\rome2_web_editor_mod</code></li>
@@ -628,6 +839,7 @@ function consoleView() {
 // ---------------------------------------------------------------- bindings
 
 function bindActions(scope) {
+  bindPickers(scope);
   scope.querySelector("#search")?.addEventListener("input", e => {
     state.search = e.target.value;
     const pos = e.target.selectionStart;
@@ -693,6 +905,7 @@ function openDialog(title, body, onConfirm) {
   dlg.innerHTML = `<form method="dialog"><h2>${title}</h2>${body}<div class="row end"><button value="cancel" class="ghost">${t("cancel")}</button><button value="ok" id="dlgOk">${t("confirm")}</button></div></form>`;
   dlg.onclose = () => { if (dlg.returnValue === "ok") onConfirm(dlg); };
   dlg.showModal();
+  bindPickers(dlg);
   return dlg;
 }
 
@@ -853,7 +1066,7 @@ function bindUnitPicker(dlg, onPick) {
   };
   filter.oninput = render;
   if (base) base.onchange = render;
-  render();
+render();
 }
 
 function createForceDialog(world, hit) {
@@ -864,7 +1077,8 @@ function createForceDialog(world, hit) {
   const regionRec = state.regions.find(r => r.key === under.key);
   const faction = hit?.item?.faction ?? hit?.item?.owner ?? regionRec?.owner ?? state.info?.player_faction;
   const body = `
-    <label>${t("faction")}${factionSelect("cfFaction", faction)}</label>
+    <label>${t("faction")}${factionSelect("cfFaction", faction, { includeDead: true })}</label>
+    <p class="muted">${t("spawnDeadHint")}</p>
     <label>${t("targetRegion")}${regionSelect("cfRegion", under.key)}</label>
     <div class="row"><label>${t("logicalX")} <input type="number" id="lx" value="${esc(logical.lx)}"></label><label>${t("logicalY")} <input type="number" id="ly" value="${esc(logical.ly)}"></label></div>
     <label>${t("unitList")}<textarea id="units" rows="2" placeholder="Rom_Hastati,Rom_Hastati,Rom_Principes"></textarea></label>
@@ -878,6 +1092,44 @@ function createForceDialog(world, hit) {
     const area = dlg.querySelector("#units");
     area.value = [area.value.trim(), key].filter(Boolean).join(",");
   });
+}
+
+function createAgentDialog(world, hit) {
+  if (!can("create_agent")) return;
+  const logical = { lx: Math.round(world.x), ly: Math.round(world.y) };
+  const under = regionUnder(logical.lx, logical.ly);
+  if (!under.key) { toast(t("dropSea")); return; }
+  const regionRec = state.regions.find(r => r.key === under.key);
+  const faction = hit?.item?.faction ?? hit?.item?.owner ?? regionRec?.owner ?? state.info?.player_faction;
+  const body = `
+    <label>${t("faction")}${factionSelect("caFaction", faction)}</label>
+    <label>${t("agentType")}<select id="caType"></select></label>
+    <label>${t("targetRegion")}${regionSelect("caRegion", under.key)}</label>
+    <div class="row"><label>${t("logicalX")} <input type="number" id="lx" value="${esc(logical.lx)}"></label><label>${t("logicalY")} <input type="number" id="ly" value="${esc(logical.ly)}"></label></div>
+    <p class="muted">${t("spawnAgentHint")}</p>`;
+  const dlg = openDialog(t("spawnAgent"), body, (dlg) => {
+    run("create_agent", {
+      faction: dlg.querySelector("#caFaction").value,
+      agent_type: dlg.querySelector("#caType").value,
+      region: dlg.querySelector("#caRegion").value,
+      x: Number(dlg.querySelector("#lx").value),
+      y: Number(dlg.querySelector("#ly").value),
+    });
+  });
+  const typeSelect = dlg.querySelector("#caType");
+  const refreshTypes = () => fillAgentTypes(typeSelect, dlg.querySelector("#caFaction").value);
+  dlg.querySelector("#caFaction").addEventListener("change", refreshTypes);
+  refreshTypes();
+}
+
+function fillAgentTypes(select, factionKey) {
+  const current = select.value;
+  const faction = state.factions.find(f => f.key === factionKey);
+  select.innerHTML = SPAWN_AGENT_TYPES.map(key => {
+    const titled = agentTitle(key, { faction: factionKey, subculture: faction?.subculture });
+    return `<option value="${key}">${esc(titled ?? t(`types.${key}`))}</option>`;
+  }).join("");
+  if (SPAWN_AGENT_TYPES.includes(current)) select.value = current;
 }
 
 function characterExperienceDialog(c) {
@@ -906,7 +1158,8 @@ function unitExperienceDialog(c) {
 function transferDialog(r) {
   const body = `
     <p class="muted">${esc(r.name)} · ${esc(factionName(r.owner))}</p>
-    <label>${t("owner")}${factionSelect("newOwner", r.owner)}</label>`;
+    <label>${t("owner")}${factionSelect("newOwner", r.owner, { includeDead: true })}</label>
+    <p class="muted">${t("transferDeadHint")}</p>`;
   openDialog(t("transfer"), body, dlg => {
     const faction = dlg.querySelector("#newOwner").value;
     if (faction && faction !== r.owner) run("transfer_region_to_faction", { region: r.key, faction });

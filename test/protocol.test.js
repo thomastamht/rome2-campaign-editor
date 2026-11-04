@@ -25,6 +25,8 @@ test("buildRequest produces the WH2 envelope and rejects reserved argument names
   assert.deepEqual(buildRequest("treasury_mod", { faction: "rom_rome", amount: 5 }, 7), { faction: "rom_rome", amount: 5, type: "treasury_mod", request_id: 7 });
   assert.throws(() => buildRequest("", {}, 1), /type/);
   assert.throws(() => buildRequest("x", { request_id: 2 }, 1), /request_id/);
+  assert.throws(() => buildRequest("x", { sent_at: 2 }, 1), /sent_at/);
+  assert.equal(buildRequest("x", {}, 1, 1700000000).sent_at, 1700000000);
   assert.throws(() => buildRequest("x", {}, 0), /positive/);
 });
 
@@ -59,7 +61,7 @@ test("isAlive accepts the ready marker, or a heartbeat answer once the marker is
 test("request writes request.json, waits for the matching request_id and ignores stale/partial responses", async () => {
   const dir = fakeDirectory('{"request_id":1,"result":"stale"}');
   let ticks = 0;
-  const bridge = new FileBridge(dir, { interval: 1, retries: 10, sleep: async () => {
+  const bridge = new FileBridge(dir, { interval: 1, retries: 10, now: () => 1700000000, sleep: async () => {
     ticks++;
     if (ticks === 1) dir.corrupt('{"request_id":'); // game mid-write
     if (ticks === 2) dir.answer(req => ({ echoed: req.type, faction: req.faction }));
@@ -67,14 +69,16 @@ test("request writes request.json, waits for the matching request_id and ignores
   bridge.nextId = 5;
   const result = await bridge.request("treasury_mod", { faction: "rom_rome", amount: 100 });
   assert.deepEqual(result, { echoed: "treasury_mod", faction: "rom_rome" });
-  assert.deepEqual(dir.writes[0], { faction: "rom_rome", amount: 100, type: "treasury_mod", request_id: 5 });
+  assert.deepEqual(dir.writes[0], { faction: "rom_rome", amount: 100, type: "treasury_mod", request_id: 5, sent_at: 1700000000 });
   assert.equal(ticks, 2);
 });
 
 test("request times out with a helpful error and serialises concurrent calls", async () => {
   const dir = fakeDirectory("");
   const bridge = new FileBridge(dir, { interval: 1, retries: 3, sleep: async () => {} });
-  await assert.rejects(bridge.request("heartbeat"), /no answer for heartbeat .*campaign loaded/);
+  await assert.rejects(bridge.request("heartbeat"), /no answer for heartbeat .*within 0\.003s - the game is not responding.*unpaused/);
+  const hinted = new FileBridge(fakeDirectory(""), { interval: 1, retries: 1, sleep: async () => {}, hints: { timeout: () => "游戏没有回应" } });
+  await assert.rejects(hinted.request("heartbeat"), /- 游戏没有回应$/);
   const order = [];
   const seq = new FileBridge(fakeDirectory(""), { interval: 1, retries: 5, sleep: async () => { seq.dir?.answer?.(req => req.type); } });
   seq.dir = seq.directory;
@@ -83,6 +87,16 @@ test("request times out with a helpful error and serialises concurrent calls", a
   await Promise.all([a, b]);
   assert.deepEqual(order, ["get_factions", "get_regions"]);
   assert.ok(seq.directory.writes[1].request_id > seq.directory.writes[0].request_id);
+});
+
+test("a stopped marker fails the request at once and makes isAlive false", async () => {
+  const stopped = '{"request_id":0,"result":{"status":"stopped","game":"rome2"}}';
+  let ticks = 0;
+  const bridge = new FileBridge(fakeDirectory(stopped), { interval: 1, retries: 50, sleep: async () => { ticks++; } });
+  await assert.rejects(bridge.request("get_snapshot"), /get_snapshot .*left the campaign map/);
+  assert.equal(ticks, 1);
+  assert.equal(bridge.stopped, true);
+  assert.equal(await new FileBridge(fakeDirectory(stopped), { interval: 1, retries: 50, sleep: async () => {} }).isAlive(), false);
 });
 
 test("assertOk surfaces handler errors", () => {
@@ -98,15 +112,13 @@ test("DemoBridge mirrors the handler set and mutates its sample campaign", async
   const before = (await demo.request("get_factions")).find(f => f.key === "rom_rome").treasury;
   assert.deepEqual(await demo.request("treasury_mod", { faction: "rom_rome", amount: 250 }), { ok: true, faction: "rom_rome", treasury: before + 250 });
   assert.equal((await demo.request("transfer_region_to_faction", { region: "rom_africa_zeugitana", faction: "rom_rome" })).owner, "rom_rome");
+  assert.match((await demo.request("transfer_region_to_faction", { region: "rom_italia_samnium", faction: "rom_epirus" })).error, /dead faction/);
   const chars = await demo.request("get_active_characters");
-  const general = chars.find(c => c.cqi === 201);
-  const reloc = await demo.request("relocate_force", { cqi: 201, region: "rom_italia_latium", x: 43, y: 33 });
-  assert.equal(reloc.ok, true);
-  assert.equal(reloc.units, general.units - 1);
-  const after = await demo.request("get_active_characters");
-  assert.equal(after.some(c => c.cqi === 201), false);
-  assert.equal(after.length, chars.length);
-  assert.match((await demo.request("nope")).error, /unknown request type/);
+  await demo.request("create_force", { faction: "rom_rome", units: "Rom_Hastati", region: "rom_italia_latium", x: 43, y: 33 });
+  assert.equal((await demo.request("get_active_characters")).length, chars.length + 1);
+  assert.equal((await demo.request("reveal_all_regions")).faction, "rom_rome");
+  for (const type of Object.keys(info.capabilities)) assert.equal(typeof demo[`h_${type}`], "function", `demo lacks ${type}`);
+  assert.match((await demo.request("relocate_force", { cqi: 201 })).error, /unknown request type/);
 });
 
 test("chooseDirectory reuses a granted folder and falls back to the picker", async () => {

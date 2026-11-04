@@ -1,25 +1,79 @@
 [h1]Total War: Rome 2 Web Editor — DEI patch[/h1]
-Adds DEI features to [b]Total War: Rome 2 Web Editor[/b] (required).
+DEI features for the [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3827602956]web editor[/url].
+
+[h2]Features[/h2]
 [list]
-[*] Unit list shows only DEI units
+[*] Show only DEI units
 [*] Edit region population: nobles, citizens, poor, foreigners
 [/list]
-Any load order.
+
+[h2]Install[/h2]
+[olist]
+[*] Press Windows+R and run: [code]powershell.exe mkdir $env:USERPROFILE\rome2_web_editor_mod[/code]
+[*] Enable this patch and the [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3827602956]web editor[/url], then load a Divide et Impera campaign.
+[*] Open [url=https://thomastamht.github.io/rome2-campaign-editor/]the web page[/url] in Chrome or Edge, click Connect folder, and choose the folder from step 1.
+[/olist]
+
+[h2]Compatibility[/h2]
+Tested on Windows only.
+Requires Divide et Impera.
+Can be added mid-save.
+Any load order. Replaces no game file.
+
+[h2]Credits[/h2]
+Vibe coded with AI. Based on IMRZ's [url=https://steamcommunity.com/sharedfiles/filedetails/?id=2295560801]Web campaign editor[/url] for Warhammer II.
+Questions or bugs? Leave a comment.
 
 [hr][/hr]
 [h1]全面战争：罗马2 网页编辑器 — DEI 补丁[/h1]
-为 [b]全面战争：罗马2 网页编辑器[/b]（必需）加上 DEI 功能。
+给[url=https://steamcommunity.com/sharedfiles/filedetails/?id=3827602956]网页编辑器[/url]加上 DEI 功能。
+
+[h2]功能[/h2]
 [list]
 [*] 兵种列表只显示 DEI 兵种
 [*] 修改地区人口：贵族、公民、贫民、外邦人
 [/list]
-加载顺序无所谓。
+
+[h2]安装[/h2]
+[olist]
+[*] 按 Windows+R，运行：[code]powershell.exe mkdir $env:USERPROFILE\rome2_web_editor_mod[/code]
+[*] 启用本补丁和[url=https://steamcommunity.com/sharedfiles/filedetails/?id=3827602956]网页编辑器[/url]，载入 DEI 战役。
+[*] 用 Chrome 或 Edge 打开[url=https://thomastamht.github.io/rome2-campaign-editor/]网页[/url]，点「连接文件夹」，选择第 1 步的文件夹。
+[/olist]
+
+[h2]兼容[/h2]
+只在 Windows 上测试过。
+需要 Divide et Impera。
+可中途加入存档。
+加载顺序无所谓，不替换任何游戏文件。
+
+[h2]致谢[/h2]
+AI vibe coding 制作。参考 IMRZ 的战锤2 [url=https://steamcommunity.com/sharedfiles/filedetails/?id=2295560801]Web campaign editor[/url]。
+有问题欢迎留言。
 
 [hr][/hr]
 [h1]全面戰爭：羅馬2 網頁編輯器 — DEI 補丁[/h1]
-為 [b]全面戰爭：羅馬2 網頁編輯器[/b]（必需）加上 DEI 功能。
+給[url=https://steamcommunity.com/sharedfiles/filedetails/?id=3827602956]網頁編輯器[/url]加上 DEI 功能。
+
+[h2]功能[/h2]
 [list]
 [*] 兵種列表只顯示 DEI 兵種
-[*] 修改地區人口：貴族、公民、平民、外邦人
+[*] 修改地區人口：貴族、公民、貧民、外邦人
 [/list]
-載入順序無所謂。
+
+[h2]安裝[/h2]
+[olist]
+[*] 按 Windows+R，執行：[code]powershell.exe mkdir $env:USERPROFILE\rome2_web_editor_mod[/code]
+[*] 啟用本補丁和[url=https://steamcommunity.com/sharedfiles/filedetails/?id=3827602956]網頁編輯器[/url]，載入 DEI 戰役。
+[*] 用 Chrome 或 Edge 打開[url=https://thomastamht.github.io/rome2-campaign-editor/]網頁[/url]，點「連接資料夾」，選擇第 1 步的資料夾。
+[/olist]
+
+[h2]相容[/h2]
+只在 Windows 上測試過。
+需要 Divide et Impera。
+可中途加入存檔。
+載入順序無所謂，不替換任何遊戲檔案。
+
+[h2]致謝[/h2]
+AI vibe coding 製作。參考 IMRZ 的戰錘2 [url=https://steamcommunity.com/sharedfiles/filedetails/?id=2295560801]Web campaign editor[/url]。
+有問題歡迎留言。

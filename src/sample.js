@@ -1,12 +1,12 @@
 // Synthetic demo campaign in the exact shapes the Lua bridge returns. Not game data.
-import { assertOk } from "./protocol.js";
 
 const factions = [
   { key: "rom_rome", treasury: 12450, is_human: true, is_dead: false, is_rebel: false, regions: 4, characters: 4, forces: 3, culture: "rom_Roman", subculture: "sc_rom_roman", leader_cqi: 101 },
   { key: "rom_carthage", treasury: 9800, is_human: false, is_dead: false, is_rebel: false, regions: 3, characters: 3, forces: 2, culture: "rom_Punic", subculture: "sc_rom_carthaginian", leader_cqi: 201 },
   { key: "rom_macedon", treasury: 6100, is_human: false, is_dead: false, is_rebel: false, regions: 2, characters: 2, forces: 2, culture: "rom_Hellenistic", subculture: "sc_rom_greek", leader_cqi: 301 },
-  { key: "rom_arverni", treasury: 2300, is_human: false, is_dead: false, is_rebel: false, regions: 2, characters: 2, forces: 1, culture: "rom_Barbarian", subculture: "sc_rom_celtic", leader_cqi: 401 },
+  { key: "rom_arverni", treasury: 2300, is_human: false, is_dead: false, is_rebel: false, regions: 2, characters: 2, forces: 1, culture: "rom_Barbarian", subculture: "sc_rom_gaul", leader_cqi: 401 },
   { key: "rom_ptolemaics", treasury: 15200, is_human: false, is_dead: false, is_rebel: false, regions: 1, characters: 1, forces: 1, culture: "rom_Hellenistic", subculture: "sc_rom_egyptian", leader_cqi: 501 },
+  { key: "rom_epirus", treasury: 0, is_human: false, is_dead: true, is_rebel: false, regions: 0, characters: 0, forces: 0, culture: "rom_Hellenistic", subculture: "sc_rom_greek", leader_cqi: null },
 ];
 
 // Logical positions copied from a live main_rome snapshot so markers land on the right cities.
@@ -41,7 +41,7 @@ const characters = [
 ].map(([cqi, faction, type, forename, surname, lx, ly, region, faction_leader, units, is_army, is_navy]) => ({
   cqi, faction, type, forename, surname, x: lx, y: ly, lx, ly, region,
   in_settlement: Boolean(region) && units !== null && cqi % 2 === 1, embedded: false, faction_leader, age: 30 + (cqi % 20),
-  has_force: units !== null, is_agent: ["spy", "dignitary", "champion"].includes(type),
+  has_force: units !== null, is_agent: ["spy", "dignitary", "champion"].includes(type), male: true,
   units, is_army, is_navy, upkeep: units ? units * 110 : undefined, strength: units ? 100 : undefined, is_general: units !== null,
 }));
 
@@ -50,15 +50,13 @@ export const demoInfo = {
   campaign: "main_rome", turn: 42, player_faction: "rom_rome", is_multiplayer: false,
   capabilities: {
     heartbeat: "verified", get_game_info: "verified", get_factions: "verified", get_regions: "verified", get_regions_detailed: "verified",
-    get_active_characters: "verified", get_force_units: "verified", reveal_all_regions: "verified", get_snapshot: "verified", treasury_mod: "verified", transfer_region_to_faction: "verified", set_public_order: "verified",
-    replenish_action_points: "verified", zero_action_points: "verified", create_force: "verified", force_declare_war: "verified",
-    force_make_peace: "verified", force_make_trade_agreement: "verified", force_diplomacy: "verified", apply_effect_bundle: "verified",
-    remove_effect_bundle: "verified", make_region_visible_in_shroud: "verified", show_shroud: "verified", scroll_camera: "verified",
-    force_rebellion_in_region: "verified", force_make_vassal: "engine", force_add_trait: "engine",
-    force_add_ancillary: "engine", add_development_points_to_region: "engine", set_tax_rate: "engine",
-    hide_character: "engine", unhide_character: "engine", award_experience_level: "engine", add_agent_experience: "verified", add_force_experience: "engine",
-    instantly_repair_building: "engine", get_settlement_slots: "verified", repair_building: "verified",
-    end_turn: "engine", relocate_force: "composed", relocate_status: "verified", move_force: "engine", move_status: "verified",
+    get_active_characters: "verified", get_snapshot: "verified", reveal_all_regions: "verified",
+    treasury_mod: "verified", transfer_region_to_faction: "verified", set_public_order: "verified",
+    replenish_action_points: "verified", zero_action_points: "verified", create_force: "verified", create_agent: "engine",
+    force_declare_war: "verified", force_make_peace: "verified", force_make_trade_agreement: "verified", force_make_vassal: "engine",
+    force_rebellion_in_region: "verified", add_development_points_to_region: "engine",
+    add_agent_experience: "verified", add_force_experience: "engine",
+    get_settlement_slots: "verified", repair_building: "verified",
   },
 };
 
@@ -70,7 +68,6 @@ export class DemoBridge {
     this.regions = structuredClone(regions);
     this.characters = structuredClone(characters);
     this.nextCqi = 900;
-    this.lastError = null;
   }
 
   async readReadyMarker() { return { ...this.info, status: "ready" }; }
@@ -100,14 +97,19 @@ export class DemoBridge {
   h_get_regions_detailed() { return structuredClone(this.regions); }
   h_get_active_characters() { return structuredClone(this.characters); }
   h_get_snapshot() { return { info: this.h_get_game_info(), factions: this.h_get_factions(), regions: this.h_get_regions_detailed(), characters: this.h_get_active_characters() }; }
-  h_get_force_units({ cqi }) { const c = this.character(cqi); return { ok: true, cqi: c.cqi, units: Array.from({ length: c.units ?? 0 }, (_, i) => ({ key: i === 0 ? "Rom_Gen_Bodyguard" : "Rom_Hastati", strength: 100 })) }; }
   h_treasury_mod({ faction, amount }) {
     if (Number(amount) < 0) throw new Error("Rome II cannot lower a treasury; only positive amounts are applied");
     const f = this.faction(faction);
     f.treasury += Number(amount);
     return { ok: true, faction, treasury: f.treasury };
   }
-  h_transfer_region_to_faction({ region, faction }) { this.faction(faction); const r = this.region(region); r.owner = faction; return { ok: true, region, owner: faction }; }
+  h_transfer_region_to_faction({ region, faction }) {
+    const f = this.faction(faction);
+    if (f.is_dead) throw new Error("Rome II will not give a region to a dead faction");
+    const r = this.region(region);
+    r.owner = faction;
+    return { ok: true, region, owner: faction };
+  }
   h_set_public_order({ region, value }) { this.region(region).public_order = Number(value); return { ok: true, region }; }
   h_replenish_action_points({ cqi }) { this.character(cqi); return { ok: true, cqi }; }
   h_zero_action_points({ cqi }) { this.character(cqi); return { ok: true, cqi }; }
@@ -115,13 +117,6 @@ export class DemoBridge {
   h_force_make_peace({ a, b }) { this.faction(a); this.faction(b); return { ok: true, a, b }; }
   h_force_make_trade_agreement({ a, b }) { this.faction(a); this.faction(b); return { ok: true, a, b }; }
   h_force_make_vassal({ a, b }) { this.faction(a); this.faction(b); return { ok: true, a, b }; }
-  h_force_diplomacy({ a, b, kind }) { this.faction(a); this.faction(b); return { ok: true, a, b, kind }; }
-  h_force_add_trait({ cqi, trait }) { this.character(cqi); return { ok: true, cqi, trait }; }
-  h_award_experience_level({ cqi, levels, points }) {
-    const c = this.character(cqi);
-    if (c.is_agent) return { ok: true, cqi, type: c.type, method: "add_agent_experience", points: points ?? (levels ?? 1) * 100 };
-    return { ok: true, cqi, type: c.type, method: "award_experience_level", levels: levels ?? 1 };
-  }
   h_add_agent_experience({ cqi, points = 100 }) { this.character(cqi); return { ok: true, cqi, points }; }
   h_add_force_experience({ cqi, levels = 1 }) {
     const c = this.character(cqi);
@@ -130,10 +125,7 @@ export class DemoBridge {
     if (!c.has_force) throw new Error(`character ${cqi} has no military force`);
     return { ok: true, cqi, levels, method: "award_experience_level" };
   }
-  h_hide_character({ cqi }) { this.character(cqi); return { ok: true, cqi }; }
-  h_unhide_character({ cqi }) { this.character(cqi); return { ok: true, cqi }; }
   h_add_development_points_to_region({ region, points }) { this.region(region); return { ok: true, region, points }; }
-  h_instantly_repair_building({ region }) { this.region(region); return { ok: true, region }; }
   slots(region) {
     const r = this.region(region);
     r.slots ??= [...["rom_ROMAN_city_major_2", "rom_ROMAN_military_main_heavy_2", "rom_ROMAN_city_major_fort_3"].map((building, index) => ({ index, building })), { index: 3 }];
@@ -145,33 +137,28 @@ export class DemoBridge {
     const s = this.slot(region, slot);
     if (!s.building) throw new Error(`slot ${slot} has no building`);
     return { ok: true, region, slot, building: s.building, percent: 100 };
-  }  h_force_rebellion_in_region({ region }) { this.region(region); return { ok: true, region }; }
-  h_set_tax_rate({ faction, rate }) { this.faction(faction); return { ok: true, faction, rate }; }
-  h_force_add_ancillary({ cqi, ancillary }) { this.character(cqi); return { ok: true, cqi, ancillary }; }
-  h_apply_effect_bundle({ bundle, faction }) { this.faction(faction); return { ok: true, bundle, faction }; }
-  h_remove_effect_bundle({ bundle, faction }) { this.faction(faction); return { ok: true, bundle, faction }; }
-  h_show_shroud({ visible }) { return { ok: true, visible }; }
-  h_make_region_visible_in_shroud({ faction, region }) { this.faction(faction); this.region(region); return { ok: true }; }
+  }
+  h_force_rebellion_in_region({ region }) { this.region(region); return { ok: true, region }; }
   h_reveal_all_regions({ faction }) { return { ok: true, faction: faction ?? this.info.player_faction, regions: this.regions.length }; }
-  h_scroll_camera({ x, y }) { return { ok: true, x, y }; }
-  h_end_turn() { this.info.turn += 1; return { ok: true }; }
   h_create_force({ faction, units, region, x, y }) {
-    this.faction(faction); this.region(region);
+    if (this.faction(faction).is_dead) throw new Error("Rome II will not spawn an army for a dead faction");
+    this.region(region);
     const list = String(units).split(",").filter(Boolean);
     const cqi = this.nextCqi++;
     this.characters.push({ cqi, faction, type: "general", forename: "Novus", surname: `#${cqi}`, x: x * 10, y: y * 10, lx: x, ly: y, region,
       in_settlement: false, embedded: false, faction_leader: false, age: 30, has_force: true, is_agent: false, units: list.length + 1, is_army: true, is_navy: false, upkeep: 0, strength: 100, is_general: true });
     return { ok: true, faction, region, id: `demo_${cqi}` };
   }
-  h_relocate_force({ cqi, region, x, y, skip_first_unit = true }) {
-    const c = this.character(cqi);
-    if (!c.has_force) throw new Error("character has no military force");
-    const units = Math.max((c.units ?? 1) - (skip_first_unit ? 1 : 0), 0);
-    assertOk(this.h_create_force({ faction: c.faction, units: Array(units).fill("Rom_Hastati").join(","), region, x, y }), "create_force");
-    this.characters = this.characters.filter(x => x.cqi !== c.cqi);
-    return { ok: true, faction: c.faction, region, units, killed_cqi: c.cqi };
+  h_create_agent({ faction, agent_type, region, x, y }) {
+    this.faction(faction);
+    if (region) this.region(region);
+    if (!["spy", "dignitary", "champion"].includes(agent_type)) throw new Error(`unknown agent type '${agent_type}'`);
+    const cqi = this.nextCqi++;
+    this.characters.push({
+      cqi, faction, type: agent_type, forename: "Novus", surname: `#${cqi}`, x, y, lx: x, ly: y, region,
+      in_settlement: false, embedded: false, faction_leader: false, age: 30, male: true,
+      has_force: false, is_agent: true, is_army: false, is_navy: false,
+    });
+    return { ok: true, faction, agent_type, region, id: `demo_agent_${cqi}`, queued: true };
   }
-  h_move_status({ cqi }) { return { ok: true, cqi, status: "idle" }; }
-  h_relocate_status({ id }) { return { ok: true, id, status: "done" }; }
-  h_move_force({ cqi, x, y }) { const c = this.character(cqi); c.lx = x; c.ly = y; c.x = x * 10; c.y = y * 10; return { ok: true, cqi, x, y }; }
 }

@@ -1,5 +1,5 @@
 // Campaign map: plots characters/settlements from their logical positions and converts
-// clicks (selection, right-click create) back into game coordinates.
+// clicks (selection, right-click menu) back into game coordinates.
 //
 // Rome II exposes two coordinate systems per character:
 //   display_position_x/y  - world units used by the camera and rendering (floats)

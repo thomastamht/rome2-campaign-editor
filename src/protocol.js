@@ -13,12 +13,15 @@ export function parseResponse(text) {
   return value;
 }
 
-export function buildRequest(type, args, requestId) {
+/** sent_at (Unix seconds) lets a freshly started session tell a waiting request from a stale one. */
+export function buildRequest(type, args, requestId, sentAt) {
   if (typeof type !== "string" || !type) throw new Error("request type is required");
   if (!Number.isInteger(requestId) || requestId <= 0) throw new Error("request_id must be a positive integer");
-  const reserved = Object.keys(args ?? {}).filter(k => k === "type" || k === "request_id");
+  const reserved = Object.keys(args ?? {}).filter(k => k === "type" || k === "request_id" || k === "sent_at");
   if (reserved.length) throw new Error(`argument may not be named ${reserved.join(", ")}`);
-  return { ...(args ?? {}), type, request_id: requestId };
+  const request = { ...(args ?? {}), type, request_id: requestId };
+  if (sentAt !== undefined) request.sent_at = sentAt;
+  return request;
 }
 
 /** Result from a mutation handler: { ok: boolean, error?: string, ...fields }. */
@@ -29,19 +32,33 @@ export function assertOk(result, what) {
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
+const DEFAULT_HINTS = {
+  timeout: () => "the game is not responding. Keep the campaign map open and unpaused, then click Refresh.",
+  stopped: () => "the game has left the campaign map (main menu, battle or loading). Return to the campaign, then click Refresh.",
+};
+
+/** The bridge writes {request_id:0,result:{status:"stopped"}} when the campaign UI goes away. */
+export function isStoppedMarker(value) {
+  return Boolean(value && value.request_id === 0 && value.result && value.result.status === "stopped");
+}
+
 export class FileBridge {
   /**
    * @param {FileSystemDirectoryHandle} directory
-   * @param {{interval?: number, retries?: number, sleep?: (ms:number)=>Promise<void>}} [options]
+   * @param {{interval?: number, retries?: number, sleep?: (ms:number)=>Promise<void>, now?: () => number,
+   *          hints?: {timeout?: () => string, stopped?: () => string}}} [options]
    */
   constructor(directory, options = {}) {
     this.directory = directory;
     this.interval = options.interval ?? 100;
-    this.retries = options.retries ?? 40;      // 4 s; get_active_characters on a big DEI map takes a few ticks
+    // 12 s: the game only reads requests while the campaign clock runs, and a busy turn can stall it.
+    this.retries = options.retries ?? 120;
     this.sleep = options.sleep ?? sleep;
+    this.now = options.now ?? (() => Math.floor(Date.now() / 1000));
+    this.hints = { ...DEFAULT_HINTS, ...options.hints };
     this.nextId = Math.floor(Date.now() / 1000) % 100000 * 10 + 1; // never collides with a stale response.json
     this.queue = Promise.resolve();
-    this.lastError = null;
+    this.stopped = false;
   }
 
   async readResponseText() {
@@ -90,7 +107,7 @@ export class FileBridge {
 
   async exchange(type, args) {
     const requestId = this.nextId++;
-    await this.writeRequest(buildRequest(type, args, requestId));
+    await this.writeRequest(buildRequest(type, args, requestId, this.now()));
     for (let attempt = 0; attempt < this.retries; attempt++) {
       await this.sleep(this.interval);
       let value;
@@ -100,12 +117,16 @@ export class FileBridge {
         continue;                                  // game is mid-write; try again
       }
       if (value.request_id === requestId) {
-        this.lastError = null;
+        this.stopped = false;
         return value.result;
       }
+      if (isStoppedMarker(value)) {
+        this.stopped = true;
+        throw new Error(`${type} (#${requestId}): ${this.hints.stopped()}`);
+      }
     }
-    this.lastError = `no answer for ${type} (#${requestId}) within ${(this.interval * this.retries) / 1000}s`;
-    throw new Error(this.lastError + " - is the campaign loaded with the mod enabled?");
+    this.stopped = false;
+    throw new Error(`no answer for ${type} (#${requestId}) within ${(this.interval * this.retries) / 1000}s - ${this.hints.timeout()}`);
   }
 }
 

@@ -54,7 +54,6 @@ mkdir "D:\Steam\steamapps\common\Total War Rome II\data\campaigns\main_rome\rome
 | 地图上的城市标记 | 地图 | 原版 GC 173 座城都有标记，落在正确的地理位置；点一座城，面板 Logical position 有数 |
 | 地图上的军队 / 特工 / 舰队 | 地图 | 将军、舰队和特工都在，走进城市的军队也在（城市自带驻军不单独画）；默认视图铺满窗口，拖到边缘不会露出底色；工具栏「城市 / 军队 / 舰队 / 特工」四个开关各自只隐藏对应标记 |
 | 未连接时 | 地图 | 只有底图，没有任何标记，顶部没有回合信息；连接文件夹后数据才出现 |
-| 控制台 → `get_force_units {"cqi": <你的某个将军 cqi>}` | 控制台 | 单位 key 列表；**记下第 0 个是否为将军卫队**（决定「跳过第一个单位」默认值） |
 
 ### B. 低风险写入
 
@@ -63,8 +62,7 @@ mkdir "D:\Steam\steamapps\common\Total War Rome II\data\campaigns\main_rome\rome
 | 外交 → 点玩家势力 → 增减 +1000 | 右上角金库立刻 +1000（最多等一帧） | `treasury_mod` 签名不对（不太可能，CA 脚本原样） |
 | 点地图上一座叛军/小势力城市 → 「转移地区」→ 弹窗选玩家势力 → 确认 | 地图上该城变色，进入你的省份 | `transfer_region_to_faction` 问题 |
 | 城市面板 → 「治安」→ 弹窗填 5 → 确认 | 该省治安面板变化 | `set_public_order_of_province_for_region` 参数不对 |
-| 外交 → 点势力 → 揭示整张地图 | 迷雾消失 | shroud 接口问题 |
-| 控制台 → `show_shroud {"visible": false}` / `{"visible": true}` | 全图迷雾开关 | `show_shroud` |
+| 控制台 → 快捷操作 → 揭开全部地区 | 玩家势力的迷雾全部消失 | `make_region_visible_in_shroud` 问题 |
 
 ### C. 角色面板（点地图上的将领，右侧最多 4 个操作）
 
@@ -84,8 +82,6 @@ mkdir "D:\Steam\steamapps\common\Total War Rome II\data\campaigns\main_rome\rome
 
 Rome II 脚本接口没有战锤 II 的 `teleport_to`，所以地图上的标记**不能拖动**：按住只会平移地图。要挪军队就在游戏里走，
 走到一半行动力没了，就点将领 → 「补满行动力」再走。
-`move_force` / `relocate_force` 仍留在桥接里，只能从「控制台 → 原始命令」手动发；`relocate_force`
-会杀原将军重建，派系领袖与玩家军队被拒绝，**不建议在存档上用**。
 
 ### D2. 设定
 
@@ -103,10 +99,8 @@ Rome II 脚本接口没有战锤 II 的 `teleport_to`，所以地图上的标记
 | 强制和平 | 恢复和平 |
 | 强制贸易协定 | 外交界面出现贸易协定 |
 | 强制附庸（B 成为选中势力的附庸） | 未在游戏里验证过的调用：成了说明参数顺序对；没成就把 B 选成原来的 A、再选 A 为 B 反过来试一次（或在控制台对调 a、b） |
-| 选项下拉（如 `non aggression pact`）→ 勾 / 取消「A 可提出」「B 可接受」→ 应用 | 只是允许 / 禁止该选项，不会签约 |
 
 Rome II 脚本接口只能强制宣战、和平、贸易协定和附庸；互不侵犯、军事通行、防御 / 军事同盟没有强制调用，侧栏下方的灰字提示就是说这个。
-战争迷雾开关和结束回合没有按钮，需要时在控制台手动发 `show_shroud` / `end_turn`。
 
 ### F. 生命周期
 
@@ -114,7 +108,6 @@ Rome II 脚本接口只能强制宣战、和平、贸易协定和附庸；互不
 |---|---|
 | 游戏里手动存档 → 回主菜单 → 读档 | `response.json` 被重新写入 ready 标记（看 turn） |
 | 打一场战斗（自动解决也行）→ 回到战役 | 网页端刷新仍然有回复（UIDestroyed/UICreated 重启轮询） |
-| 网页端 → 结束回合 | 回合推进 |
 | 网页端开着、玩两回合，期间点几次「刷新」 | 游戏不卡顿、不弹脚本错误 |
 
 ## 3. 第二轮：DEI
@@ -122,15 +115,14 @@ Rome II 脚本接口只能强制宣战、和平、贸易协定和附庸；互不
 1. 启动器恢复你平时的 DEI 模组组合（参考桌面上的 `used_mods.backup.txt`），**保持** `rome2_web_editor.pack` 勾选。`DEI综合调整.pack` 自带一份 `episodicscripting.lua`，会盖掉本 Mod 的挂钩，所以还要勾选 `!rome2_web_editor_dei_patch.pack`（`npm run build:dei-patch` 生成），并把它排在 `DEI综合调整.pack` **上面**。不勾这个补丁，桥接日志里不会出现 `[hook:episodic] attached`。
 2. 新开或读一局 DEI 战役，重复第 1 节第 3–4 步和第 2 节全部。
 3. 额外确认 DEI 自己的东西没坏：人口界面、补给、改革弹窗、第一回合事件都正常。它们和桥接共用 `episodicscripting.lua`，理论上互不影响，但要看一眼。
-4. 创建军队时用 DEI 的单位 key：先对任意 DEI 军队跑 `get_force_units`，复制里面的 key。
+4. 创建军队时，单位列表里应只列出 DEI 的单位。
 
 ## 4. 测完要给我的东西
 
 1. 两轮各自的 ready 标记原文（`response.json` 第一行）。
 2. 第 2 节每一项的通过 / 失败；失败的把网页端「控制台 → 通信日志」里对应条目展开，复制 `error` 文字。
-3. `get_force_units` 第 0 个单位是不是将军卫队。
-4. 地图上城市和军队的位置是否与游戏一致。
-5. 任何游戏内弹出的脚本错误截图。
+3. 地图上城市和军队的位置是否与游戏一致。
+4. 任何游戏内弹出的脚本错误截图。
 
 我据此改 `M.capabilities` 和默认值，然后重新 `npm run build:pack` 上传。
 
@@ -139,7 +131,7 @@ Rome II 脚本接口只能强制宣战、和平、贸易协定和附庸；互不
 桥接会写一个诊断日志 `bridge.log`，先看它：
 
 - `%USERPROFILE%\rome2_web_editor_mod\bridge.log`，以及游戏根目录 `D:\Steam\steamapps\common\Total War Rome II\rome2_web_editor_bridge.log`
-- 正常内容依次是：`[hook:episodic] attached` → `module loaded; USERPROFILE=...` → `attached v0.1.0 (Lua 5.1)` → `event NewSession` → `event UICreated Campaign UI` → `event FirstTickAfterWorldCreated` → `start(...) folder=... writable=true` → `ready marker written` → `polling started`
+- 正常内容依次是：`[hook:episodic] attached` → `module loaded; USERPROFILE=...` → `attached v0.1.0 (Lua 5.1)` → `event NewSession` → `event UICreated Campaign UI` → `event FirstTickAfterWorldCreated` → `start(...) session N: folder=... writable=true` → `polling started (session N)` → `ready marker written`。每次进入战役界面（读档、打完战斗回来）N 加一；上次留下的旧请求会记一行 `skipped request #... left from an earlier session`，不会再执行。离开战役界面时会记 `bridge stopped`，同时 `response.json` 被写成 `status: "stopped"`
 - 日志在哪一行停住，问题就在哪一步。连 `[hook:episodic]` 都没有 → 游戏没有加载 pack 里的 `episodicscripting.lua`。
 
 其他检查：

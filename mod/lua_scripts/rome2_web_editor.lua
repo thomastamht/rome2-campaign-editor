@@ -26,7 +26,8 @@ M.version       = "0.1.0"
 M.protocol      = 1
 M.folder_name   = "rome2_web_editor_mod"
 M.poll_interval = 0.1
-M.poll_id       = "rome2_web_editor_poll"
+M.poll_prefix   = "rome2_web_editor_poll:"
+M.session       = M.session or 0
 M.handlers      = M.handlers or {}
 M.request_id    = M.request_id or -1
 M.active        = false
@@ -35,27 +36,17 @@ M.timer_pending = false
 -- How each handler was validated before any in-game test:
 --   verified     exact call seen in CA or DEI Rome II campaign scripts
 --   engine       method name present in Rome II's GAME binding table, signature from Attila-era docs
---   composed     built from several of the above
---   experimental method presence not confirmed for Rome II; call is pcall-guarded
 M.capabilities = {
   heartbeat = "verified", get_game_info = "verified", get_factions = "verified",
   get_regions = "verified", get_regions_detailed = "verified", get_active_characters = "verified",
-  get_force_units = "verified", reveal_all_regions = "verified", get_snapshot = "verified",
+  get_snapshot = "verified", reveal_all_regions = "verified",
   treasury_mod = "verified", transfer_region_to_faction = "verified",
   set_public_order = "verified", replenish_action_points = "verified", zero_action_points = "verified",
-  create_force = "verified", force_declare_war = "verified", force_make_peace = "verified",
-  force_make_trade_agreement = "verified", force_diplomacy = "verified",
-  apply_effect_bundle = "verified", remove_effect_bundle = "verified",
-  make_region_visible_in_shroud = "verified", show_shroud = "verified", scroll_camera = "verified",
-  force_rebellion_in_region = "verified",
-  force_make_vassal = "engine", force_add_trait = "engine",
-  force_add_ancillary = "engine", add_development_points_to_region = "engine",
-  set_tax_rate = "engine", hide_character = "engine", unhide_character = "engine", award_experience_level = "engine",
+  create_force = "verified", create_agent = "engine", force_declare_war = "verified", force_make_peace = "verified",
+  force_make_trade_agreement = "verified", force_make_vassal = "engine",
+  force_rebellion_in_region = "verified", add_development_points_to_region = "engine",
   add_agent_experience = "verified", add_force_experience = "engine",
-  instantly_repair_building = "engine", end_turn = "engine",
   get_settlement_slots = "verified", repair_building = "verified",
-  relocate_force = "composed", relocate_status = "verified",
-  move_force = "engine", move_status = "verified",
 }
 
 -------------------------------------------------------------------------------
@@ -165,17 +156,9 @@ local function run_handler(fn, data)
   return { ok = false, error = tostring(result) }
 end
 
--- Every request is held back for a while after relocate_force kills the original general, so
--- nothing reads the model while the game processes the death.
-M.hold_until = nil
-M.removed = { characters = {} }
 -- cqi -> true when the character is an agent. Filled while describing characters, so a
 -- later positions-only poll does not re-test every politician's type.
 M.agent_cqis = M.agent_cqis or {}
-local HOLD_SECONDS = 5
-local function hold_model_reads(seconds)
-  M.hold_until = os.clock() + (seconds or HOLD_SECONDS)
-end
 
 function M.handle_request()
   local text = read_all(M.request_file)
@@ -183,18 +166,10 @@ function M.handle_request()
   local ok, data = pcall(JSON.decode, text)
   if not ok or type(data) ~= "table" then return end          -- partial write; retry next tick
   if data.request_id == nil or data.request_id == M.request_id then return end
-  if M.hold_until then
-    if os.clock() < M.hold_until then return end               -- leave the request for a later tick
-    M.hold_until = nil
-  end
   M.request_id = data.request_id
   local fn = M.handlers[data.type]
   if not fn then
     M.handle_response({ ok = false, error = "unknown request type: " .. tostring(data.type) })
-    return
-  end
-  if data.cqi ~= nil and M.removed.characters[tostring(data.cqi)] then
-    M.handle_response({ ok = false, error = "character was killed: cqi " .. tostring(data.cqi) })
     return
   end
   local result = run_handler(fn, data)
@@ -283,20 +258,23 @@ local function find_faction(key)
   error("faction not found: " .. tostring(key))
 end
 
+-- Rome II's is_dead() can answer false for a destroyed faction that faction_list() still returns,
+-- so a faction with no region and no army also counts as dead.
+local function faction_is_dead(f)
+  if safe(function() return f:is_dead() end, false) == true then return true end
+  local regions = safe(function() return f:region_list():num_items() end)
+  local forces = safe(function() return f:military_force_list():num_items() end)
+  return regions == 0 and forces == 0
+end
+
 local function find_region(key)
   local r = world():region_manager():region_by_key(key)
   if is_null(r) then error("region not found: " .. tostring(key)) end
   return r
 end
 
--- A general killed by relocate_force stays in its faction's character_list for the rest of the
--- session; it is hidden from every list and refused as a target. Reset when a campaign loads.
-local function forget_removed() M.removed = { characters = {} } end
-local function is_removed_character(cqi) return M.removed.characters[tostring(cqi)] == true end
-
 local function find_character(cqi)
   local wanted = tostring(cqi)
-  if is_removed_character(wanted) then error("character was killed: cqi " .. wanted) end
   local factions = world():faction_list()
   for i = 0, factions:num_items() - 1 do
     local chars = factions:item_at(i):character_list()
@@ -373,7 +351,7 @@ local function describe_faction(f)
     name = localised(f, "factions_screen_name_", key),
     treasury = safe(function() return f:treasury() end),
     is_human = safe(function() return f:is_human() end, false),
-    is_dead = safe(function() return f:is_dead() end, false),
+    is_dead = faction_is_dead(f),
     is_rebel = safe(function() return f:is_rebel() end, false),
     regions = safe(function() return f:region_list():num_items() end, 0),
     characters = safe(function() return f:character_list():num_items() end, 0),
@@ -462,6 +440,7 @@ local function describe_character(c, faction_key)
     in_settlement = safe(function() return c:in_settlement() end, false),
     embedded = safe(function() return c:is_embedded_in_military_force() end, false),
     faction_leader = safe(function() return c:is_faction_leader() end, false),
+    male = safe(function() return c:is_male() end),
     age = safe(function() return c:age() end),
     region = character_region(c),
     has_force = has_force,
@@ -499,7 +478,7 @@ local function character_positions()
     for j = 0, chars:num_items() - 1 do
       local c = chars:item_at(j)
       local cqi = safe(function() return c:cqi() end)
-      if cqi and not is_removed_character(cqi) and character_on_map(c, cqi) then
+      if cqi and character_on_map(c, cqi) then
         table.insert(out_list, {
           cqi = cqi,
           x = safe(function() return c:display_position_x() end),
@@ -526,12 +505,9 @@ M.handlers.get_active_characters = function(data)
     local fkey = f:name()
     local chars = f:character_list()
     for j = 0, chars:num_items() - 1 do
-      local c = chars:item_at(j)
-      if not is_removed_character(c:cqi()) then
-        local entry = describe_character(c, fkey)
-        if include_all or entry.has_force or entry.is_agent then
-          table.insert(out_list, entry)
-        end
+      local entry = describe_character(chars:item_at(j), fkey)
+      if include_all or entry.has_force or entry.is_agent then
+        table.insert(out_list, entry)
       end
     end
   end
@@ -546,22 +522,6 @@ M.handlers.get_snapshot = function(data)
     regions = M.handlers.get_regions_detailed(data),
     characters = M.handlers.get_active_characters(data),
   }
-end
-
-M.handlers.get_force_units = function(data)
-  local cqi = require_arg(data, "cqi", "number")
-  local c = find_character(cqi)
-  if not c:has_military_force() then error("character has no military force") end
-  local units = {}
-  local list = c:military_force():unit_list()
-  for i = 0, list:num_items() - 1 do
-    local u = list:item_at(i)
-    table.insert(units, {
-      key = safe(function() return u:unit_key() end),
-      strength = safe(function() return u:percentage_proportion_of_full_strength() end),
-    })
-  end
-  return ok({ cqi = cqi, units = units })
 end
 
 -------------------------------------------------------------------------------
@@ -580,11 +540,16 @@ end
 
 M.handlers.transfer_region_to_faction = function(data)
   local region = require_arg(data, "region", "string")
-  local faction = require_arg(data, "faction", "string")
+  local faction_key = require_arg(data, "faction", "string")
   find_region(region)
-  find_faction(faction)
-  gi():transfer_region_to_faction(region, faction)
-  return ok({ region = region, owner = safe(function() return find_region(region):owning_faction():name() end) })
+  local faction = find_faction(faction_key)
+  if faction_is_dead(faction) then
+    error("Rome II will not give a region to a dead faction")
+  end
+  gi():transfer_region_to_faction(region, faction_key)
+  local owner = safe(function() return find_region(region):owning_faction():name() end)
+  if owner ~= faction_key then error("Rome II left " .. region .. " with " .. tostring(owner)) end
+  return ok({ region = region, owner = owner })
 end
 
 M.handlers.set_public_order = function(data)
@@ -603,40 +568,12 @@ M.handlers.add_development_points_to_region = function(data)
   return ok({ region = region })
 end
 
-M.handlers.set_tax_rate = function(data)
-  local faction = require_arg(data, "faction", "string")
-  local rate = require_arg(data, "rate", "number")
-  gi():set_tax_rate(faction, rate)
-  return ok({ faction = faction })
-end
-
-M.handlers.apply_effect_bundle = function(data)
-  local bundle = require_arg(data, "bundle", "string")
-  local faction = require_arg(data, "faction", "string")
-  local turns = tonumber(data.turns) or 0
-  gi():apply_effect_bundle(bundle, faction, turns)
-  return ok({ bundle = bundle, faction = faction })
-end
-
-M.handlers.remove_effect_bundle = function(data)
-  local bundle = require_arg(data, "bundle", "string")
-  local faction = require_arg(data, "faction", "string")
-  gi():remove_effect_bundle(bundle, faction)
-  return ok({ bundle = bundle, faction = faction })
-end
-
 M.handlers.force_rebellion_in_region = function(data)
   local region = require_arg(data, "region", "string")
   local units = tonumber(data.units) or 4
   local x = require_arg(data, "x", "number")
   local y = require_arg(data, "y", "number")
   gi():force_rebellion_in_region(region, units, "", x, y, false)
-  return ok({ region = region })
-end
-
-M.handlers.instantly_repair_building = function(data)
-  local region = require_arg(data, "region", "string")
-  gi():instantly_repair_building(region)
   return ok({ region = region })
 end
 
@@ -718,16 +655,6 @@ M.handlers.force_make_vassal = function(data)
   return ok({ a = a, b = b })
 end
 
--- Enables/disables a diplomatic option between two factions; it does not sign the treaty.
-M.handlers.force_diplomacy = function(data)
-  local a, b = two_factions(data)
-  local kind = require_arg(data, "kind", "string")
-  local offer = require_arg(data, "offer", "boolean")
-  local accept = require_arg(data, "accept", "boolean")
-  gi():force_diplomacy(a, b, kind, offer, accept)
-  return ok({ a = a, b = b, kind = kind })
-end
-
 -------------------------------------------------------------------------------
 -- characters / forces
 -------------------------------------------------------------------------------
@@ -752,27 +679,6 @@ end
 --     anything on spies / dignitaries / champions.
 --   award_experience_level(lookup, levels): instant rank (chevrons) for the units of the general's
 --     army; this is what add_force_experience uses.
--- `award_experience_level` on an agent routes to add_agent_experience (agents have no army).
-local function experience_method_for(c)
-  local ctype = character_type_of(c)
-  if AGENT_TYPES[ctype or ""] then return "add_agent_experience", ctype end
-  return "award_experience_level", ctype
-end
-
-M.handlers.award_experience_level = function(data)
-  local cqi = require_arg(data, "cqi", "number")
-  local c = find_character(cqi)
-  local method, ctype = experience_method_for(c)
-  if method == "add_agent_experience" then
-    local points = tonumber(data.points) or (tonumber(data.levels) or 1) * 100
-    gi():add_agent_experience(char_str(cqi), points)
-    return ok({ cqi = cqi, type = ctype, method = method, points = points })
-  end
-  local levels = tonumber(data.levels) or 1
-  gi():award_experience_level(char_str(cqi), levels)
-  return ok({ cqi = cqi, type = ctype, method = method, levels = levels })
-end
-
 M.handlers.add_agent_experience = function(data)
   local cqi = require_arg(data, "cqi", "number")
   local points = tonumber(data.points) or 100
@@ -793,34 +699,6 @@ M.handlers.add_force_experience = function(data)
   return ok({ cqi = cqi, levels = levels, method = "award_experience_level" })
 end
 
-M.handlers.hide_character = function(data)
-  local cqi = require_arg(data, "cqi", "number")
-  gi():hide_character(char_str(cqi))
-  return ok({ cqi = cqi })
-end
-
-M.handlers.unhide_character = function(data)
-  local cqi = require_arg(data, "cqi", "number")
-  gi():unhide_character(char_str(cqi))
-  return ok({ cqi = cqi })
-end
-
-M.handlers.force_add_trait = function(data)
-  local cqi = require_arg(data, "cqi", "number")
-  local trait = require_arg(data, "trait", "string")
-  find_character(cqi)
-  gi():force_add_trait(char_str(cqi), trait, data.show_message == true)
-  return ok({ cqi = cqi, trait = trait })
-end
-
-M.handlers.force_add_ancillary = function(data)
-  local cqi = require_arg(data, "cqi", "number")
-  local ancillary = require_arg(data, "ancillary", "string")
-  find_character(cqi)
-  gi():force_add_ancillary(char_str(cqi), ancillary)
-  return ok({ cqi = cqi, ancillary = ancillary })
-end
-
 -- x/y are LOGICAL map coordinates (campaign_manager:create_force compares them with logical_position_x/y).
 -- command_queue is always true: every CA and DEI call site uses it, and running the spawn synchronously
 -- from a TimeTrigger callback crashed the game in testing.
@@ -830,220 +708,42 @@ M.handlers.create_force = function(data)
   local region = require_arg(data, "region", "string")
   local x = require_arg(data, "x", "number")
   local y = require_arg(data, "y", "number")
-  find_faction(faction)
+  if faction_is_dead(find_faction(faction)) then error("Rome II will not spawn an army for a dead faction") end
   find_region(region)
   local id = "rome2_web_editor_" .. tostring(M.request_id) .. "_" .. tostring(os.time())
   gi():create_force(faction, units, region, x, y, id, true)
   return ok({ faction = faction, region = region, id = id, queued = true })
 end
 
--- Movement order through the game's own pathfinding (respects impassable terrain, embarks armies
--- at sea, keeps fleets at sea). Same call as CA's Move_NPC_Army in lib_misc_campaign.lua:
---   game_interface:move_to(char_str, x, y, true)
--- Logical x/y. Movement points apply; pass replenish=true to top them up first.
-local function issue_move(cqi, x, y, replenish)
-  local g = gi()
-  pcall(function() g:enable_movement_for_character(char_str(cqi)) end)
-  if replenish then pcall(function() g:replenish_action_points(char_str(cqi)) end) end
-  local ok_move, err_move = pcall(function() g:move_to(char_str(cqi), x, y, true) end)
-  if not ok_move then error("move_to failed: " .. tostring(err_move)) end
-end
-
--- chain=true (default) keeps the order alive: whenever the army stops short of the target it is
--- replenished and re-ordered, so a drag can cross the whole map in one turn. Gives up after
--- several stalls without progress (unreachable / blocked).
-M.escorts = M.escorts or {}
-M.handlers.move_force = function(data)
-  local cqi = require_arg(data, "cqi", "number")
-  local x = require_arg(data, "x", "number")
-  local y = require_arg(data, "y", "number")
-  local c = find_character(cqi)
-  issue_move(cqi, x, y, data.replenish ~= false)
-  if data.chain ~= false then
-    M.escorts[cqi] = { x = x, y = y, last_lx = c:logical_position_x(), last_ly = c:logical_position_y(),
-                       stalls = 0, reissues = 0, ticks = 0, status = "moving" }
-  end
-  log("move_force: cqi " .. tostring(cqi) .. " -> " .. x .. "," .. y .. (data.chain ~= false and " (chained)" or ""))
-  return ok({ cqi = cqi, x = x, y = y, chained = data.chain ~= false })
-end
-
-M.handlers.move_status = function(data)
-  local cqi = require_arg(data, "cqi", "number")
-  local e = M.escorts[cqi]
-  if not e then return ok({ cqi = cqi, status = "idle" }) end
-  return ok({ cqi = cqi, status = e.status, reissues = e.reissues, target = { x = e.x, y = e.y } })
-end
-
--- Called every poll tick (0.1 s); acts every 5th tick.
-local function tick_escorts()
-  for cqi, e in pairs(M.escorts) do
-    e.ticks = e.ticks + 1
-    if e.ticks % 5 == 0 then
-      local ok_c, c = pcall(find_character, cqi)
-      if not ok_c then
-        M.escorts[cqi] = nil
-      else
-        local lx, ly = c:logical_position_x(), c:logical_position_y()
-        if math.max(math.abs(lx - e.x), math.abs(ly - e.y)) <= 1 then
-          e.status = "arrived"
-          log("move_force: cqi " .. tostring(cqi) .. " arrived at " .. lx .. "," .. ly)
-          M.escorts[cqi] = nil
-        elseif lx == e.last_lx and ly == e.last_ly then
-          e.stalls = e.stalls + 1
-          if e.stalls >= 2 then
-            e.stalls = 0
-            e.reissues = e.reissues + 1
-            if e.reissues > 8 then
-              e.status = "stuck"
-              log("move_force: cqi " .. tostring(cqi) .. " stuck at " .. lx .. "," .. ly .. "; giving up")
-              M.escorts[cqi] = nil
-            else
-              pcall(issue_move, cqi, e.x, e.y, true)
-            end
-          end
-        else
-          e.stalls = 0
-          e.last_lx, e.last_ly = lx, ly
-        end
-      end
-    end
-  end
-end
-
--- Rome II has no campaign teleport. "Relocate" recreates the force at the target (same faction,
--- same unit roster) and then kills the original general; the new force gets a freshly generated
--- general, so rank/traits of the old one are lost.
---
--- Sequence (asynchronous, mirrors campaign_manager:create_force):
---   1. create_force(..., id, true) goes through the command queue
---   2. ScriptedForceCreated fires -> the new general is located near (x, y)
---   3. a short time trigger later the original character is killed (never in the same tick)
---   4. a 6 s timeout abandons the relocation (original kept) if the force never appears
-M.pending = M.pending or {}
-local KILL_PREFIX, TIMEOUT_PREFIX = "rome2_web_editor_kill:", "rome2_web_editor_timeout:"
-
-local function general_near(faction_key, x, y, exclude_cqi)
-  local best, best_d = nil, 9
-  local chars = find_faction(faction_key):character_list()
-  for i = 0, chars:num_items() - 1 do
-    local c = chars:item_at(i)
-    local cqi = c:cqi()
-    if cqi ~= exclude_cqi and not is_removed_character(cqi) and safe(function() return c:has_military_force() end, false) then
-      local d = (c:logical_position_x() - x) ^ 2 + (c:logical_position_y() - y) ^ 2
-      if d < best_d then best, best_d = cqi, d end
-    end
-  end
-  return best
-end
-
-M.relocation_counter = M.relocation_counter or 0
-
--- Destructive by nature (the original general dies). Refused for faction leaders and for human
--- factions unless the caller passes allow_leader / allow_player: killing the player's leader on
--- turn 1 and then opening the army panel crashed the game (2026-10-21 00:38).
-M.handlers.relocate_force = function(data)
-  local cqi = require_arg(data, "cqi", "number")
-  local region = require_arg(data, "region", "string")
-  local x = require_arg(data, "x", "number")
-  local y = require_arg(data, "y", "number")
-  local skip_first = data.skip_first_unit ~= false   -- item 0 is normally the general's own unit
-  for id, p in pairs(M.pending) do
-    if p.cqi == cqi then error("a relocation of this character is already pending (" .. id .. ")") end
-  end
-  local c = find_character(cqi)
-  if not c:has_military_force() then error("character has no military force") end
-  local is_leader = safe(function() return c:is_faction_leader() end, false)
-  local is_human = safe(function() return c:faction():is_human() end, false)
-  if is_leader and not data.allow_leader then error("refusing to recreate a faction leader's army (kills the leader); use a move order instead") end
-  if is_human and not data.allow_player then error("refusing to recreate a player army (scripted generals break the politics UI); use a move order instead") end
-  find_region(region)
-  local faction = c:faction():name()
-  local list = c:military_force():unit_list()
-  local keys = {}
-  for i = (skip_first and 1 or 0), list:num_items() - 1 do
-    table.insert(keys, list:item_at(i):unit_key())
-  end
-  if #keys == 0 then error("no units to recreate (force has only the general's unit)") end
-  M.relocation_counter = M.relocation_counter + 1
-  local id = "rome2_web_editor_reloc_" .. tostring(cqi) .. "_" .. tostring(os.time()) .. "_" .. tostring(M.relocation_counter)
-  M.pending[id] = { cqi = cqi, faction = faction, x = x, y = y, units = #keys, kill = data.kill_original ~= false,
-                    leader = is_leader, status = "queued" }
-  gi():create_force(faction, table.concat(keys, ","), region, x, y, id, true)
-  gi():add_time_trigger(TIMEOUT_PREFIX .. id, 6)
-  log("relocate " .. id .. ": queued create_force for " .. faction .. " at " .. x .. "," .. y .. " (" .. #keys .. " units)")
-  return ok({ faction = faction, region = region, id = id, units = #keys, original_cqi = cqi, pending = true })
-end
-
-M.handlers.relocate_status = function(data)
-  local id = require_arg(data, "id", "string")
-  local p = M.pending[id] or M.finished and M.finished[id]
-  if not p then return ok({ id = id, status = "unknown" }) end
-  return ok({ id = id, status = p.status, new_cqi = p.new_cqi, original_cqi = p.cqi })
-end
-
-function M.on_force_created()
-  for id, p in pairs(M.pending) do
-    if p.status == "queued" then
-      local new_cqi = safe(function() return general_near(p.faction, p.x, p.y, p.cqi) end)
-      if new_cqi then
-        p.new_cqi = new_cqi
-        p.status = p.kill and "created" or "done"
-        log("relocate " .. id .. ": force created, new general cqi " .. tostring(new_cqi))
-        if p.kill then gi():add_time_trigger(KILL_PREFIX .. id, 0.5) else M.finish(id) end
-      end
-    end
-  end
-end
-
-M.finished = M.finished or {}
-function M.finish(id)
-  local p = M.pending[id]
-  if not p then return end
-  M.pending[id] = nil
-  M.finished[id] = p
-end
-
-local function run_kill(id)
-  local p = M.pending[id]
-  if not p or p.status ~= "created" then return end
-  local ok_find = pcall(find_character, p.cqi)
-  if not ok_find then p.status = "done"; log("relocate " .. id .. ": original already gone"); M.finish(id); return end
-  local ok_kill, err = pcall(function() gi():kill_character(char_str(p.cqi), true) end)
-  if ok_kill then M.removed.characters[tostring(p.cqi)] = true; hold_model_reads() end
-  p.status = ok_kill and "done" or "kill_failed"
-  log("relocate " .. id .. ": kill original cqi " .. tostring(p.cqi) .. (ok_kill and " ok" or (" failed: " .. tostring(err))))
-  M.finish(id)
-end
-
-local function run_timeout(id)
-  local p = M.pending[id]
-  if p and p.status == "queued" then
-    p.status = "create_failed"
-    log("relocate " .. id .. ": force never appeared; original kept")
-    M.finish(id)
-  end
-end
-
--------------------------------------------------------------------------------
--- shroud / camera / turn
--------------------------------------------------------------------------------
-
-M.handlers.show_shroud = function(data)
-  local visible = require_arg(data, "visible", "boolean")
-  gi():show_shroud(visible)
-  return ok({ visible = visible })
-end
-
-M.handlers.make_region_visible_in_shroud = function(data)
+-- game_interface:create_agent is in Rome II's GAME table. The argument order is the one Attila and
+-- Warhammer II's campaign_manager document for this call: faction, agent type, subtype, logical x,
+-- logical y, id, command_queue. agent_culture_details gives spy, dignitary and champion no subtype
+-- key (only generals use Rom_General), so the subtype is empty. command_queue stays true, same as
+-- create_force: a synchronous spawn from the poll callback crashed the game in testing.
+local SPAWN_AGENT_TYPES = { spy = true, dignitary = true, champion = true }
+M.handlers.create_agent = function(data)
   local faction = require_arg(data, "faction", "string")
+  local agent_type = require_arg(data, "agent_type", "string")
   local region = require_arg(data, "region", "string")
-  gi():make_region_visible_in_shroud(faction, region)
-  return ok({ faction = faction, region = region })
+  local x = require_arg(data, "x", "number")
+  local y = require_arg(data, "y", "number")
+  if not SPAWN_AGENT_TYPES[agent_type] then error("unknown agent type '" .. agent_type .. "'") end
+  find_faction(faction)
+  find_region(region)
+  local id = "rome2_web_editor_agent_" .. tostring(M.request_id) .. "_" .. tostring(os.time())
+  gi():create_agent(faction, agent_type, "", x, y, id, true)
+  return ok({ faction = faction, agent_type = agent_type, region = region, id = id, queued = true })
 end
 
+-------------------------------------------------------------------------------
+-- shroud
+-------------------------------------------------------------------------------
+
+-- Lifts the fog of war over every region for one faction (the player's unless given).
 M.handlers.reveal_all_regions = function(data)
   local faction = data.faction or player_faction_key()
   if not faction then error("no player faction") end
+  find_faction(faction)
   local list = world():region_manager():region_list()
   local n = 0
   for i = 0, list:num_items() - 1 do
@@ -1051,21 +751,6 @@ M.handlers.reveal_all_regions = function(data)
     n = n + 1
   end
   return ok({ faction = faction, regions = n })
-end
-
--- x/y are DISPLAY coordinates; z is camera height (CA scripts use ~0.95 for close, larger for far).
-M.handlers.scroll_camera = function(data)
-  local x = require_arg(data, "x", "number")
-  local y = require_arg(data, "y", "number")
-  local z = tonumber(data.z) or 6
-  local t = tonumber(data.duration) or 0.5
-  gi():scroll_camera(t, { x, y, z }, { x, y, z })
-  return ok({ x = x, y = y })
-end
-
-M.handlers.end_turn = function()
-  gi():end_turn()
-  return ok({})
 end
 
 -------------------------------------------------------------------------------
@@ -1087,6 +772,21 @@ local function write_ready_marker()
   })
 end
 
+-- request.json outlives the session that wrote it. Anything older than the browser's 12 s wait has
+-- nobody waiting on it, so it is marked as handled instead of being run again (a second
+-- treasury_mod or create_force on load). Requests without sent_at come from an older page.
+local STALE_REQUEST_SECONDS = 15
+local function skip_stale_request()
+  local text = read_all(M.request_file)
+  if not text or text == "" then return end
+  local ok_decode, data = pcall(JSON.decode, text)
+  if not ok_decode or type(data) ~= "table" or data.request_id == nil then return end
+  local sent = tonumber(data.sent_at)
+  if sent and math.abs(os.time() - sent) <= STALE_REQUEST_SECONDS then return end
+  M.request_id = data.request_id
+  log("skipped request #" .. tostring(data.request_id) .. " " .. tostring(data.type) .. " left from an earlier session")
+end
+
 local function schedule_poll()
   if M.timer_pending or not M.active then return end
   local ok_add = pcall(function() M.gi:add_time_trigger(M.poll_id, M.poll_interval) end)
@@ -1096,36 +796,51 @@ end
 
 function M.on_time_trigger(context)
   local id = context and context.string
-  if type(id) ~= "string" then return end
-  if id:sub(1, #KILL_PREFIX) == KILL_PREFIX then run_kill(id:sub(#KILL_PREFIX + 1)) return end
-  if id:sub(1, #TIMEOUT_PREFIX) == TIMEOUT_PREFIX then run_timeout(id:sub(#TIMEOUT_PREFIX + 1)) return end
-  if id ~= M.poll_id then return end
+  if id ~= M.poll_id then return end                            -- also drops timers of an earlier session
   M.timer_pending = false
   if not M.active then return end
-  if not M.polled_once then M.polled_once = true log("polling started") end
+  -- The marker waits for the first tick: before it the campaign clock is not running (loading,
+  -- intro, pause), and a browser that saw the marker would time out on its first request.
+  if M.ready_pending then
+    M.ready_pending = false
+    log("polling started (session " .. M.session .. ")")
+    local ok_marker, err_marker = pcall(write_ready_marker)
+    if not ok_marker then log("ready marker failed: " .. tostring(err_marker)) else log("ready marker written") end
+    local ok_skip, err_skip = pcall(skip_stale_request)
+    if not ok_skip then log("stale request check failed: " .. tostring(err_skip)) end
+  end
   local ok_poll, err = pcall(M.handle_request)
   if not ok_poll then log("poll error: " .. tostring(err)) end
-  local ok_escort, err_escort = pcall(tick_escorts)
-  if not ok_escort then log("escort error: " .. tostring(err_escort)) end
   schedule_poll()
 end
 
+-- Every campaign UI (load, return from battle) starts a new session from a clean state. The poll
+-- timer name carries the session, so a timer armed before the UI went away cannot block or
+-- double the new poll.
 function M.start(game_interface, reason)
   if not game_interface then log("start(" .. tostring(reason) .. "): no game_interface yet") return end
   M.gi = game_interface
   if M.active then return end
   local writable = M.select_folder()
-  log("start(" .. tostring(reason) .. "): folder=" .. tostring(M.folder) .. " kind=" .. tostring(M.folder_kind) .. " writable=" .. tostring(writable))
+  M.session = M.session + 1
+  log("start(" .. tostring(reason) .. ") session " .. M.session .. ": folder=" .. tostring(M.folder) .. " kind=" .. tostring(M.folder_kind) .. " writable=" .. tostring(writable))
+  M.poll_id = M.poll_prefix .. M.session
+  M.timer_pending = false
   M.active = true
   M.request_id = -1
-  forget_removed()
-  local ok_marker, err = pcall(write_ready_marker)
-  if not ok_marker then log("ready marker failed: " .. tostring(err)) else log("ready marker written") end
+  M.ready_pending = true
   schedule_poll()
 end
 
+-- Polling ends with the campaign UI; the marker tells the browser at once instead of after a timeout.
 function M.stop()
   M.active = false
+  M.ready_pending = false
+  if M.response_file then
+    M.request_id = 0
+    local ok_marker, err = pcall(M.handle_response, { status = "stopped", game = "rome2", version = M.version })
+    if not ok_marker then log("stopped marker failed: " .. tostring(err)) end
+  end
   log("bridge stopped")
 end
 
@@ -1149,7 +864,6 @@ function M.attach(scripting)
     end
   end, false)
   scripting.AddEventCallBack("TimeTrigger", function(context) M.on_time_trigger(context) end, false)
-  scripting.AddEventCallBack("ScriptedForceCreated", function() pcall(M.on_force_created) end, false)
   scripting.AddEventCallBack("UIDestroyed", function() M.stop() end, false)
   log("attached v" .. M.version .. " (" .. tostring(_VERSION) .. ")")
 end

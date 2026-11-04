@@ -1,3 +1,9 @@
+A region transfer to a dead faction now says that Rome II will not do it, instead of answering OK. The settlement stays with its current owner.
+Spawning an army for a dead faction is refused the same way. A faction with no region and no army is now marked ✝ even when the game still lists it as alive.
+
+把地区转给已灭亡势力时，会说明罗马2不会这样做，而不再显示 OK。城市仍属于原来的势力。
+为已灭亡势力生成军队也会同样被拒绝。没有地区也没有军队的势力，即使游戏仍把它列为存活，现在也会标上 ✝。
+
 0.1.0
 - First release
 
